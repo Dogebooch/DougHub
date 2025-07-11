@@ -1,0 +1,50 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+
+# Environment files and virtual environments
+.env
+venv*/
+.venv*/
+env*/
+ENV*/
+
+# Large/Generated/Model files and folders
+resources/
+databases/
+output/
+outputs/
+models/
+uploads/
+*.safetensors
+*.ckpt
+*.pth
+*.db
+*.sqlite
+*.log
+*.tmp
+*.bak
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Ignore test outputs
+/test_inpaint/
+
+# Large backup or extras folders
+Extras/
+
+# Allow configs, scripts, and small assets
+!InvokeAI/configs/
+!InvokeAI/style_presets/
+!InvokeAI/invokeai.example.yaml
+!InvokeAI/invokeai.yaml
+!app.py
+!start_invokeai_server.bat
+!test_invokeai_connection.py
+!dougdraw/
+!templates/
+!README.md
+!setup_models.bat
+!start_dougdraw.bat

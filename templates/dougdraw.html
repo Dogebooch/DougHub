@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>DougDraw</title>
+  <style>
+    body {
+      background: #1e1e1e;
+      color: #f0f0f0;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+    }
+    h1, h2, label {
+      color: #f0f0f0;
+    }
+    #zoomContainer {
+      width: 100%;
+      max-width: 1000px;
+      height: 600px;
+      margin: 2em auto 1em auto;
+      overflow: auto;
+      background: #222;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      border-radius: 18px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+      padding: 1.5em;
+    }
+    #uploadedImage {
+      display: block;
+      max-width: 100%;
+      max-height: 100%;
+      margin: auto;
+      user-select: none;
+      cursor: grab;
+      transition: box-shadow 0.2s;
+      border-radius: 12px;
+      background: #181818;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+    }
+    form {
+      margin: 1.5em auto 0 auto;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 1em;
+      justify-content: center;
+    }
+    input[type="text"] {
+      background: #222;
+      color: #f0f0f0;
+      border: 1px solid #444;
+      border-radius: 10px;
+      padding: 0.5em 1em;
+      outline: none;
+    }
+    input[type="text"]:focus {
+      border-color: #888;
+      background: #282828;
+    }
+    button {
+      background: #333;
+      color: #f0f0f0;
+      border: none;
+      border-radius: 6px;
+      padding: 0.5em 1.2em;
+      cursor: pointer;
+      font-size: 1em;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #444;
+    }
+    /* Custom Scrollbar Styling */
+    ::-webkit-scrollbar {
+      width: 12px;
+      background: #232323;
+      border-radius: 8px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #444;
+      border-radius: 8px;
+      border: 2px solid #232323;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #666;
+    }
+    /* Firefox */
+    html {
+      scrollbar-color: #444 #232323;
+      scrollbar-width: thin;
+    }
+    #toolbar {
+      position: fixed;
+      top: 24px;
+      left: 24px;
+      z-index: 1000;
+      background: #232323;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+      padding: 0.5em 0.5em 0.5em 0.5em;
+      display: flex;
+      gap: 0.5em;
+    }
+    .tool-btn {
+      background: #222;
+      color: #f0f0f0;
+      border: none;
+      border-radius: 6px;
+      padding: 0.5em 1.2em;
+      cursor: pointer;
+      font-size: 1em;
+      transition: background 0.2s, color 0.2s;
+      outline: none;
+    }
+    .tool-btn.active, .tool-btn:focus {
+      background: #444;
+      color: #fff;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <button id="moveToolBtn" class="tool-btn active">Move</button>
+    <button id="selectToolBtn" class="tool-btn">Select</button>
+  </div>
+  <h1>DougDraw</h1>
+
+  <!-- Image Upload Form -->
+  <form id="uploadForm" action="/dougdraw/upload" method="POST" enctype="multipart/form-data">
+    <input id="imageInput" type="file" name="image" accept="image/*" required>
+  </form>
+
+  {% if filename %}
+    <h2>Uploaded Image:</h2>
+    <div id="zoomContainer">
+      <div style="position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">
+        <img 
+          id="uploadedImage"
+          src="{{ url_for('static', filename='uploads/' + filename) }}" 
+          draggable="false"
+        >
+        <canvas id="selectionCanvas" style="position: absolute; left: 0; top: 0; pointer-events: none;"></canvas>
+      </div>
+    </div>
+    <form action="/dougdraw/edit" method="POST" style="margin-top: 2.5em; margin-bottom: 2em; padding: 1.2em 2em; background: #232323; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.18);">
+      <input type="hidden" name="filename" value="{{ filename }}">
+      <input type="hidden" id="rectX" name="x">
+      <input type="hidden" id="rectY" name="y">
+      <input type="hidden" id="rectWidth" name="width">
+      <input type="hidden" id="rectHeight" name="height">
+      <label for="promptInput">Prompt:</label>
+      <input type="text" id="promptInput" name="prompt" required>
+      <button type="submit">Apply Edit</button>
+      <button type="button" id="inpaintBtn">Inpaint</button>
+    </form>
+    <script>
+      let currentTool = 'move';
+      const moveToolBtn = document.getElementById('moveToolBtn');
+      const selectToolBtn = document.getElementById('selectToolBtn');
+      let selectionCanvas = null;
+      function setTool(tool) {
+        currentTool = tool;
+        moveToolBtn.classList.toggle('active', tool === 'move');
+        selectToolBtn.classList.toggle('active', tool === 'select');
+        if (selectionCanvas) {
+          selectionCanvas.style.pointerEvents = (tool === 'select') ? 'auto' : 'none';
+        }
+      }
+      moveToolBtn.addEventListener('click', () => setTool('move'));
+      selectToolBtn.addEventListener('click', () => setTool('select'));
+      (function() {
+        const container = document.getElementById('zoomContainer');
+        const img = document.getElementById('uploadedImage');
+        selectionCanvas = document.getElementById('selectionCanvas');
+        const rectXInput = document.getElementById('rectX');
+        const rectYInput = document.getElementById('rectY');
+        const rectWidthInput = document.getElementById('rectWidth');
+        const rectHeightInput = document.getElementById('rectHeight');
+        let scale = 1.0;
+        const minScale = 0.2;
+        const maxScale = 5.0;
+        let originX = 0;
+        let originY = 0;
+        let isPanning = false;
+        let startX, startY, lastOriginX, lastOriginY;
+
+        // Selection state
+        let isSelecting = false;
+        let selStartX, selStartY, selCurrentX, selCurrentY;
+
+        // Center image at load
+        function centerImage() {
+          scale = 1.0;
+          originX = 0;
+          originY = 0;
+          updateTransform();
+          // Scroll to center
+          setTimeout(() => {
+            container.scrollLeft = (img.offsetWidth * scale - container.clientWidth) / 2;
+            container.scrollTop = (img.offsetHeight * scale - container.clientHeight) / 2;
+          }, 10);
+          // Resize selection canvas
+          selectionCanvas.width = img.offsetWidth;
+          selectionCanvas.height = img.offsetHeight;
+          selectionCanvas.style.width = img.offsetWidth + 'px';
+          selectionCanvas.style.height = img.offsetHeight + 'px';
+          selectionCanvas.style.left = img.offsetLeft + 'px';
+          selectionCanvas.style.top = img.offsetTop + 'px';
+          clearSelection();
+        }
+
+        function updateTransform() {
+          img.style.transform = `translate(${originX}px, ${originY}px) scale(${scale})`;
+          img.style.transformOrigin = '0 0';
+          selectionCanvas.style.transform = img.style.transform;
+          selectionCanvas.style.transformOrigin = img.style.transformOrigin;
+        }
+
+        // Mouse wheel zoom
+        container.addEventListener('wheel', function(e) {
+          e.preventDefault();
+          const rect = img.getBoundingClientRect();
+          const mouseX = e.clientX - rect.left;
+          const mouseY = e.clientY - rect.top;
+          const prevScale = scale;
+          if (e.deltaY < 0) {
+            scale = Math.min(maxScale, scale * 1.1);
+          } else {
+            scale = Math.max(minScale, scale / 1.1);
+          }
+          // Calculate new origin to keep mouse position stable
+          originX = mouseX - (mouseX - originX) * (scale / prevScale);
+          originY = mouseY - (mouseY - originY) * (scale / prevScale);
+          updateTransform();
+        }, { passive: false });
+
+        // Panning with mouse drag (only in Move mode)
+        img.addEventListener('mousedown', function(e) {
+          if (currentTool === 'move') {
+            isPanning = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            lastOriginX = originX;
+            lastOriginY = originY;
+            img.style.cursor = 'grabbing';
+          }
+        });
+        document.addEventListener('mousemove', function(e) {
+          if (currentTool === 'move' && isPanning) {
+            originX = lastOriginX + (e.clientX - startX);
+            originY = lastOriginY + (e.clientY - startY);
+            updateTransform();
+          }
+        });
+        document.addEventListener('mouseup', function() {
+          if (currentTool === 'move') {
+            isPanning = false;
+            img.style.cursor = 'grab';
+          }
+        });
+
+        // Selection logic (only in Select mode)
+        selectionCanvas.style.pointerEvents = 'auto';
+        selectionCanvas.addEventListener('mousedown', function(e) {
+          if (currentTool !== 'select') return;
+          const rect = selectionCanvas.getBoundingClientRect();
+          selStartX = (e.clientX - rect.left) / scale;
+          selStartY = (e.clientY - rect.top) / scale;
+          selCurrentX = selStartX;
+          selCurrentY = selStartY;
+          isSelecting = true;
+          drawSelection();
+        });
+        selectionCanvas.addEventListener('mousemove', function(e) {
+          if (!isSelecting || currentTool !== 'select') return;
+          const rect = selectionCanvas.getBoundingClientRect();
+          selCurrentX = (e.clientX - rect.left) / scale;
+          selCurrentY = (e.clientY - rect.top) / scale;
+          drawSelection();
+        });
+        selectionCanvas.addEventListener('mouseup', function(e) {
+          if (!isSelecting || currentTool !== 'select') return;
+          isSelecting = false;
+          drawSelection();
+          // Save selection to hidden fields
+          const x = Math.round(Math.min(selStartX, selCurrentX));
+          const y = Math.round(Math.min(selStartY, selCurrentY));
+          const w = Math.round(Math.abs(selCurrentX - selStartX));
+          const h = Math.round(Math.abs(selCurrentY - selStartY));
+          rectXInput.value = x;
+          rectYInput.value = y;
+          rectWidthInput.value = w;
+          rectHeightInput.value = h;
+        });
+        // Prevent image drag in select mode
+        img.addEventListener('dragstart', e => e.preventDefault());
+
+        function drawSelection() {
+          const ctx = selectionCanvas.getContext('2d');
+          ctx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);
+          if (isSelecting || (rectWidthInput.value && rectHeightInput.value)) {
+            const x = isSelecting ? Math.min(selStartX, selCurrentX) : parseInt(rectXInput.value);
+            const y = isSelecting ? Math.min(selStartY, selCurrentY) : parseInt(rectYInput.value);
+            const w = isSelecting ? Math.abs(selCurrentX - selStartX) : parseInt(rectWidthInput.value);
+            const h = isSelecting ? Math.abs(selCurrentY - selStartY) : parseInt(rectHeightInput.value);
+            if (w > 0 && h > 0) {
+              ctx.save();
+              ctx.strokeStyle = 'red';
+              ctx.lineWidth = 2;
+              ctx.setLineDash([6, 4]);
+              ctx.strokeRect(x, y, w, h);
+              ctx.restore();
+            }
+          }
+        }
+        function clearSelection() {
+          rectXInput.value = '';
+          rectYInput.value = '';
+          rectWidthInput.value = '';
+          rectHeightInput.value = '';
+          drawSelection();
+        }
+
+        // Responsive centering on load
+        window.addEventListener('load', centerImage);
+        window.addEventListener('resize', centerImage);
+        img.addEventListener('load', centerImage);
+        // Set initial pointer events for selection canvas
+        setTool(currentTool);
+      })();
+    </script>
+  {% endif %}
+  
+  <script>
+    // Auto-submit form when a file is selected
+    const imageInput = document.getElementById('imageInput');
+    const uploadForm = document.getElementById('uploadForm');
+
+    imageInput.addEventListener('change', function() {
+      if (imageInput.files.length > 0) {
+        uploadForm.submit();
+      }
+    });
+
+    // Inpainting functionality
+    {% if filename %}
+    const inpaintBtn = document.getElementById('inpaintBtn');
+    const promptInput = document.getElementById('promptInput');
+    const uploadedImage = document.getElementById('uploadedImage');
+
+    inpaintBtn.addEventListener('click', async function() {
+      const prompt = promptInput.value.trim();
+      if (!prompt) {
+        alert('Please enter a prompt for inpainting');
+        return;
+      }
+
+      // Get selection coordinates
+      const x = parseInt(document.getElementById('rectX').value);
+      const y = parseInt(document.getElementById('rectY').value);
+      const width = parseInt(document.getElementById('rectWidth').value);
+      const height = parseInt(document.getElementById('rectHeight').value);
+
+      if (!x || !y || !width || !height) {
+        alert('Please select a region to inpaint');
+        return;
+      }
+
+      // Show loading state
+      inpaintBtn.disabled = true;
+      inpaintBtn.textContent = 'Inpainting...';
+
+      try {
+        // Create a canvas to crop the selected region
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = width;
+        canvas.height = height;
+
+        // Draw the cropped region
+        ctx.drawImage(uploadedImage, x, y, width, height, 0, 0, width, height);
+
+        // Convert canvas to blob
+        const croppedBlob = await new Promise(resolve => {
+          canvas.toBlob(resolve, 'image/png');
+        });
+
+        // Create FormData for the request
+        const formData = new FormData();
+        formData.append('image', croppedBlob, 'cropped_region.png');
+        formData.append('prompt', prompt);
+
+        // Send to inpainting endpoint
+        const response = await fetch('/inpaint', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Inpainting failed');
+        }
+
+        const result = await response.json();
+        
+        // Display the inpainted result
+        if (result.image) {
+          // Create a new image element for the result
+          const resultImg = document.createElement('img');
+          resultImg.src = 'data:image/png;base64,' + result.image;
+          resultImg.style.maxWidth = '100%';
+          resultImg.style.maxHeight = '400px';
+          resultImg.style.marginTop = '1em';
+          resultImg.style.borderRadius = '8px';
+          resultImg.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+
+          // Remove any previous result
+          const existingResult = document.querySelector('.inpaint-result');
+          if (existingResult) {
+            existingResult.remove();
+          }
+
+          // Add result container
+          const resultContainer = document.createElement('div');
+          resultContainer.className = 'inpaint-result';
+          resultContainer.style.marginTop = '1em';
+          resultContainer.style.padding = '1em';
+          resultContainer.style.background = '#232323';
+          resultContainer.style.borderRadius = '12px';
+          resultContainer.style.boxShadow = '0 2px 8px rgba(0,0,0,0.18)';
+          
+          const resultTitle = document.createElement('h3');
+          resultTitle.textContent = 'Inpainted Result:';
+          resultTitle.style.margin = '0 0 0.5em 0';
+          resultTitle.style.color = '#f0f0f0';
+          
+          resultContainer.appendChild(resultTitle);
+          resultContainer.appendChild(resultImg);
+          
+          // Insert after the form
+          const form = document.querySelector('form[action="/dougdraw/edit"]');
+          form.parentNode.insertBefore(resultContainer, form.nextSibling);
+        }
+
+      } catch (error) {
+        console.error('Inpainting error:', error);
+        alert('Inpainting failed: ' + error.message);
+      } finally {
+        // Reset button state
+        inpaintBtn.disabled = false;
+        inpaintBtn.textContent = 'Inpaint';
+      }
+    });
+    {% endif %}
+  </script>
+</body>
+</html>

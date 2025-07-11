@@ -1,0 +1,34 @@
+# Internal metadata - do not edit:
+schema_version: 4.0.2
+
+# Put user settings here - see https://invoke-ai.github.io/InvokeAI/configuration/:
+
+# Web server settings
+host: 127.0.0.1
+port: 9090
+
+# Directory settings - all relative to InvokeAI folder
+models_dir: ../resources/models
+convert_cache_dir: ../resources/models/.convert_cache
+download_cache_dir: ../resources/models/.download_cache
+legacy_conf_dir: configs
+db_dir: ../resources/databases
+outputs_dir: ../resources/outputs
+custom_nodes_dir: nodes
+style_presets_dir: ../resources/style_presets
+workflow_thumbnails_dir: ../resources/workflow_thumbnails
+
+# Logging settings
+log_handlers:
+- console
+log_format: color
+log_level: info
+log_sql: false
+log_level_network: warning
+
+# Performance settings
+device_working_mem_gb: 3.0
+keep_ram_copy_of_weights: true
+lazy_offload: true
+device: auto
+precision: auto
