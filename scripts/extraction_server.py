@@ -66,10 +66,10 @@ def download_images(images, base_filename):
                 }
             )
 
-            print(f"   ✅ Saved: {img_filename}")
+            print(f"   [OK] Saved: {img_filename}")
 
         except Exception as e:
-            print(f"   ❌ Failed to download image {idx}: {e}")
+            print(f"   [FAIL] Failed to download image {idx}: {e}")
             downloaded.append(
                 {"index": idx, "url": img.get("url", ""), "error": str(e)}
             )
@@ -108,7 +108,7 @@ def receive_extraction():
         downloaded_images = []
         images = data.get("images", [])
         if images:
-            print(f"\n📸 Downloading {len(images)} image(s)...")
+            print(f"\n[DOWNLOAD] Downloading {len(images)} image(s)...")
             downloaded_images = download_images(images, base_filename)
 
         # Save JSON metadata (without the full HTML to keep it readable)
@@ -128,17 +128,17 @@ def receive_extraction():
 
         # Print to terminal with formatting
         print("\n" + "=" * 80)
-        print(f"📥 NEW EXTRACTION RECEIVED at {data.get('timestamp', 'unknown')}")
+        print(f"[NEW] EXTRACTION RECEIVED at {data.get('timestamp', 'unknown')}")
         print("=" * 80)
-        print(f"🌐 URL: {data.get('url', 'unknown')}")
-        print(f"🏥 Site: {data.get('siteName', 'unknown')}")
-        print(f"📊 Elements found: {data.get('elementCount', 0)}")
-        print(f"📸 Images found: {data.get('imageCount', 0)}")
-        print(f"📏 HTML size: {len(data.get('pageHTML', '')) / 1024:.1f} KB")
+        print(f"[URL] {data.get('url', 'unknown')}")
+        print(f"[SITE] {data.get('siteName', 'unknown')}")
+        print(f"[ELEMENTS] {data.get('elementCount', 0)}")
+        print(f"[IMAGES] {data.get('imageCount', 0)}")
+        print(f"[SIZE] {len(data.get('pageHTML', '')) / 1024:.1f} KB")
         print("=" * 80)
 
         # Print file locations
-        print(f"\n💾 Files saved:")
+        print("\n[SAVED] Files saved:")
         print(f"   HTML: {html_file}")
         print(f"   JSON: {json_file}")
 
@@ -146,12 +146,12 @@ def receive_extraction():
         body_text = data.get("bodyText", "")
         if body_text:
             preview = body_text[:500].replace("\n", " ")
-            print(f"\n📄 Body Text Preview:\n{preview}...")
+            print(f"\n[PREVIEW] Body Text Preview:\n{preview}...")
 
         # Print some interesting elements
         elements = data.get("elements", [])
         if elements:
-            print("\n🔍 Sample Elements (first 10):")
+            print("\n[SAMPLE] Sample Elements (first 10):")
             for i, elem in enumerate(elements[:10]):
                 if elem.get("text"):
                     print(
@@ -159,8 +159,8 @@ def receive_extraction():
                     )
 
         print("\n" + "=" * 80)
-        print(f"✅ Total extractions received: {len(extractions)}")
-        print(f"📂 View HTML: {html_file.absolute()}")
+        print(f"[OK] Total extractions received: {len(extractions)}")
+        print(f"[FILE] View HTML: {html_file.absolute()}")
         print("=" * 80 + "\n")
 
         return jsonify(
@@ -181,7 +181,7 @@ def receive_extraction():
         ), 200
 
     except Exception as e:
-        print(f"\n❌ ERROR receiving extraction: {e}\n", file=sys.stderr)
+        print(f"\n[ERROR] ERROR receiving extraction: {e}\n", file=sys.stderr)
         return jsonify({"error": str(e)}), 500
 
 
@@ -216,7 +216,7 @@ def get_extraction(index):
 def clear_extractions():
     """Clear all stored extractions."""
     extractions.clear()
-    print("\n🗑️  All extractions cleared\n")
+    print("\n[CLEAR] All extractions cleared\n")
     return jsonify({"status": "success", "message": "All extractions cleared"}), 200
 
 
@@ -241,7 +241,7 @@ def index():
 def main():
     """Run the Flask server."""
     print("\n" + "=" * 80)
-    print("🚀 TAMPERMONKEY EXTRACTION SERVER")
+    print("[SERVER] TAMPERMONKEY EXTRACTION SERVER")
     print("=" * 80)
     print("Server is running on http://localhost:5000")
     print("Waiting for extractions from Tampermonkey script...")
@@ -250,9 +250,9 @@ def main():
     try:
         app.run(host="127.0.0.1", port=5000, debug=False, use_reloader=False)
     except KeyboardInterrupt:
-        print("\n\n👋 Server stopped by user\n")
+        print("\n\n[STOP] Server stopped by user\n")
     except Exception as e:
-        print(f"\n❌ Server error: {e}\n", file=sys.stderr)
+        print(f"\n[ERROR] Server error: {e}\n", file=sys.stderr)
         sys.exit(1)
 
 
