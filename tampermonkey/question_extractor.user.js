@@ -137,6 +137,43 @@
             const pageHTML = document.documentElement.outerHTML;
             const bodyText = document.body.innerText;
             
+            // Extract ALL images from the page
+            const imageData = [];
+            
+            // 1. Fancybox gallery images (main question images - chest X-rays, ECGs, etc.)
+            const mediaLinks = document.querySelectorAll('#media-links a.fancybox');
+            mediaLinks.forEach((link, index) => {
+                imageData.push({
+                    index: imageData.length,
+                    url: link.href,
+                    title: link.title || link.alt || '',
+                    type: 'fancybox-gallery',
+                    source: 'question'
+                });
+            });
+            
+            // 2. All other inline img tags (educational infographics, diagrams, etc.)
+            const allImgs = document.querySelectorAll('img');
+            allImgs.forEach((img) => {
+                const src = img.src || img.getAttribute('ng-src');
+                if (src && !src.startsWith('data:') && !src.includes('icon')) {
+                    // Skip if already captured via fancybox
+                    const alreadyCaptured = imageData.some(i => i.url === src);
+                    if (!alreadyCaptured) {
+                        imageData.push({
+                            index: imageData.length,
+                            url: src,
+                            title: img.alt || img.title || '',
+                            type: 'inline-image',
+                            source: img.closest('.feedbackTab') ? 'feedback' :
+                                   img.closest('.keyPointsTab') ? 'keypoints' :
+                                   img.closest('.referenceTab') ? 'references' :
+                                   img.closest('.questionStem') ? 'question' : 'other'
+                        });
+                    }
+                }
+            });
+
             // Extract all elements with IDs, classes, and tags
             const allElements = document.querySelectorAll('*');
             const elementData = [];
@@ -169,7 +206,9 @@
                 pageHTML: pageHTML,
                 bodyText: bodyText,
                 elementCount: elementData.length,
-                elements: elementData
+                elements: elementData,
+                images: imageData,
+                imageCount: imageData.length
             };
             
             // Log to console
@@ -178,6 +217,10 @@
             console.log('═══════════════════════════════════════════════════════════');
             console.table(elementData);
             console.log('[Anki Extractor] Total elements found:', elementData.length);
+            if (imageData.length > 0) {
+                console.log('[Anki Extractor] IMAGES FOUND:');
+                console.table(imageData);
+            }
             console.log('[Anki Extractor] Payload size:', Math.round(JSON.stringify(payload).length / 1024), 'KB');
             console.log('═══════════════════════════════════════════════════════════');
 
@@ -302,6 +345,11 @@
     
     /**
      * Send extracted data to Anki via AnkiConnect (placeholder for future)
+     * 
+     * Images will be handled using AnkiConnect's storeMediaFile action:
+     * 1. Download image as base64 data URL
+     * 2. Send via storeMediaFile action to save in Anki's media collection
+     * 3. Reference the stored filename in card HTML with <img> tag
      */
     function sendToAnki(qnaData) {
         console.log('[Anki Extractor] sendToAnki called (not implemented yet):', qnaData);
@@ -315,15 +363,29 @@
         //             deckName: "Medicine",
         //             modelName: "Basic-Q&A-with-Context",
         //             fields: {
-        //                 Question: qnaData.question,
+        //                 Question: qnaData.question + (qnaData.imageHtml || ''),
         //                 Answer: qnaData.correctAnswer,
         //                 Explanation: qnaData.explanation,
-        //                 Source: qnaData.site
+        //                 Source: qnaData.site,
+        //                 ImageCredit: qnaData.imageCredit || ''
         //             },
         //             tags: ["extracted"]
         //         }
         //     }
         // };
+        //
+        // If qnaData.images exists:
+        // 1. For each image, call storeMediaFile action:
+        //    {
+        //      action: "storeMediaFile",
+        //      version: 6,
+        //      params: {
+        //        filename: "question_12345.jpg",
+        //        data: "base64-encoded-image-data"
+        //      }
+        //    }
+        // 2. Build imageHtml: '<img src="question_12345.jpg" />'
+        // 3. Append to Question field
     }
 
     // --- Initialize ---

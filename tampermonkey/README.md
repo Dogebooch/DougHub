@@ -7,6 +7,7 @@ A Tampermonkey userscript that extracts medical questions and answers from ACEP 
 - 🎴 Floating extraction button on supported pages
 - 🔍 Debug mode that outputs full page HTML to browser console
 - 📋 Automatic clipboard copy of page HTML
+- 📸 Automatic image extraction and download (chest X-rays, ECGs, etc.)
 - 🎨 Visual feedback (processing, success, error states)
 - 🔧 Prepared for AnkiConnect integration
 
@@ -83,8 +84,17 @@ Waiting for extractions from Tampermonkey script...
    🌐 URL: https://learn.acep.org/...
    🏥 Site: ACEP PeerPrep
    📊 Elements found: 542
+   📸 Images found: 1
    📏 HTML size: 245.3 KB
    ================================================================================
+   
+   📸 Downloading 1 image(s)...
+      Downloading image 1/1: https://cdn.mycrowdwisdom.com/acep/te-questions/389.4_Question-1658949814916.jpg
+      ✅ Saved: 20251116_142549_ACEP_PeerPrep_0_img0.jpg
+   
+   💾 Files saved:
+      HTML: P:\Python Projects\DougHub\extractions\20251116_142549_ACEP_PeerPrep_0.html
+      JSON: P:\Python Projects\DougHub\extractions\20251116_142549_ACEP_PeerPrep_0.json
    
    📄 Body Text Preview:
    Question 1 of 10 A 45-year-old male presents with chest pain...
@@ -94,7 +104,13 @@ Waiting for extractions from Tampermonkey script...
      2. [button] button.answer-choice: A. Administer aspirin
    ```
 
-6. **Inspect browser console**: You'll also see detailed logs and a table of all extracted elements
+6. **Inspect browser console**: You'll also see detailed logs and a table of all extracted elements and images
+
+7. **Check saved files**: All extractions are saved to the `extractions/` directory:
+   - `*_ACEP_PeerPrep_0.html` - Full page HTML
+   - `*_ACEP_PeerPrep_0.json` - Structured data with element list and image metadata
+   - `*_ACEP_PeerPrep_0_img0.jpg` - Downloaded images (X-rays, ECGs, etc.)
+   - Image credit/attribution is preserved in the JSON under `images[].title`
 
 ### Finding the Right Selectors
 

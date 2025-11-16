@@ -62,3 +62,8 @@ anki_test_data/
 # Tampermonkey extractions (debug data)
 extractions/*.html
 extractions/*.json
+extractions/*.jpg
+extractions/*.jpeg
+extractions/*.png
+extractions/*.gif
+extractions/*.webp
