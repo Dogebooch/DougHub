@@ -156,7 +156,14 @@
             const allImgs = document.querySelectorAll('img');
             allImgs.forEach((img) => {
                 const src = img.src || img.getAttribute('ng-src');
-                if (src && !src.startsWith('data:') && !src.includes('icon')) {
+                // Filter out UI elements: data URIs, icons, abbreviation/lab value buttons
+                const isUIElement = !src || 
+                                   src.startsWith('data:') || 
+                                   src.includes('icon') ||
+                                   src.includes('Abbreviation-Icon') ||
+                                   src.includes('Lab-Values-Icon');
+                
+                if (!isUIElement) {
                     // Skip if already captured via fancybox
                     const alreadyCaptured = imageData.some(i => i.url === src);
                     if (!alreadyCaptured) {
