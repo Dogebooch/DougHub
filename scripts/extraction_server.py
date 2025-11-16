@@ -4,14 +4,15 @@ Local server to receive extracted page data from Tampermonkey script.
 Displays the received data in the terminal for debugging.
 """
 
-from flask import Flask, request, jsonify
-from flask_cors import CORS
 import json
-from datetime import datetime
 import sys
-from pathlib import Path
-import urllib.request
 import urllib.parse
+import urllib.request
+from datetime import datetime
+from pathlib import Path
+
+from flask import Flask, jsonify, request
+from flask_cors import CORS
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes

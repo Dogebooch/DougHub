@@ -18,7 +18,9 @@ class DeckListPanel(QWidget):
 
     deck_selected = pyqtSignal(str)  # Emits deck name when selected
 
-    def __init__(self, repository: AnkiRepository, parent: QWidget | None = None) -> None:
+    def __init__(
+        self, repository: AnkiRepository, parent: QWidget | None = None
+    ) -> None:
         """Initialize the deck list panel.
 
         Args:

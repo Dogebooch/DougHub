@@ -76,7 +76,9 @@ def test_deck_manager(anki_manager: AnkiProcessManager) -> Generator[str, None, 
 
 
 @pytest.fixture
-def integration_client(anki_manager: AnkiProcessManager) -> Generator[AnkiRepository, None, None]:
+def integration_client(
+    anki_manager: AnkiProcessManager,
+) -> Generator[AnkiRepository, None, None]:
     """Fixture to create an AnkiConnect client for integration tests.
 
     Skips tests if AnkiConnect is not accessible.
@@ -142,9 +144,9 @@ def assert_valid_note_structure(note_dict: dict[str, Any]) -> None:
     for field_name, field_data in note_dict["fields"].items():
         assert isinstance(field_data, dict), f"Field '{field_name}' must be a dict"
         assert "value" in field_data, f"Field '{field_name}' missing 'value' key"
-        assert isinstance(
-            field_data["value"], str
-        ), f"Field '{field_name}' value must be a string"
+        assert isinstance(field_data["value"], str), (
+            f"Field '{field_name}' value must be a string"
+        )
 
     assert "tags" in note_dict, "Note missing 'tags' field"
     assert isinstance(note_dict["tags"], list), "'tags' must be a list"

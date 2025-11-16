@@ -23,7 +23,9 @@ class MainWindow(QMainWindow):
     and deck browser/card editor on the right.
     """
 
-    def __init__(self, repository: AnkiRepository, parent: QWidget | None = None) -> None:
+    def __init__(
+        self, repository: AnkiRepository, parent: QWidget | None = None
+    ) -> None:
         """Initialize the main window.
 
         Args:

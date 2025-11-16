@@ -54,7 +54,9 @@ class NotesTableModel(QAbstractTableModel):
             return 0
         return len(self._headers)
 
-    def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> str | None:
+    def data(
+        self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole
+    ) -> str | None:
         """Return data for a specific cell.
 
         Args:
@@ -142,7 +144,9 @@ class DeckBrowserView(QWidget):
 
     note_selected = pyqtSignal(int)  # Emits note ID when double-clicked
 
-    def __init__(self, repository: AnkiRepository, parent: QWidget | None = None) -> None:
+    def __init__(
+        self, repository: AnkiRepository, parent: QWidget | None = None
+    ) -> None:
         """Initialize the deck browser view.
 
         Args:

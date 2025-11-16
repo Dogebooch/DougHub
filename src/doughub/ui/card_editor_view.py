@@ -32,7 +32,9 @@ class CardEditorView(QWidget):
     note_saved = pyqtSignal(int)  # Emits note ID when saved
     cancelled = pyqtSignal()  # Emits when cancel is clicked
 
-    def __init__(self, repository: AnkiRepository, parent: QWidget | None = None) -> None:
+    def __init__(
+        self, repository: AnkiRepository, parent: QWidget | None = None
+    ) -> None:
         """Initialize the card editor view.
 
         Args:
