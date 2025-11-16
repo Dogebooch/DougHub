@@ -57,28 +57,18 @@ def parse_source_and_key(data: dict, base_filename: str) -> tuple[str, str]:
     # Extract question key from the URL or use the extraction index
     url = data.get("url", "")
 
-    # For MKSAP URLs like: https://mksap19.acponline.org/app/question-bank/x3/x3_id/mk19x_3_id_q008
-    # Extract the question ID from the URL
-    if "mksap" in url.lower():
-        parts = url.rstrip("/").split("/")
-        if parts:
-            # Try to get the last part that looks like a question ID
-            last_part = parts[-1]
-            if last_part.startswith("mk") or last_part.startswith("q"):
-                question_key = last_part
-            else:
-                # Fall back to extracting from base_filename
-                question_key = base_filename.split("_")[-1]
-        else:
-            question_key = base_filename.split("_")[-1]
-    # For ACEP URLs, extract similarly
-    elif "acep" in url.lower():
-        # Try to parse question identifier from URL
-        parts = url.rstrip("/").split("/")
-        if parts and len(parts) > 1:
-            question_key = parts[-1] if parts[-1] else parts[-2]
-        else:
-            question_key = base_filename.split("_")[-1]
+    # For MKSAP and ACEP URLs, extract the question ID from the URL
+    # Examples:
+    #   https://mksap19.acponline.org/app/question-bank/random-question/xvUuU0LgBl5Re8Wi/4
+    #   https://mksap19.acponline.org/app/question-bank/x3/x3_id/mk19x_3_id_q008
+    #   https://learn.acep.org/...
+    parts = url.rstrip("/").split("/")
+    if parts and len(parts) > 0:
+        # Always use the last part of the URL as the question key
+        question_key = parts[-1]
+        # If it's empty or looks like a session ID (very long alphanumeric), try the second-to-last part
+        if not question_key or len(question_key) > 50:
+            question_key = parts[-2] if len(parts) > 1 else base_filename.split("_")[-1]
     else:
         # Fallback: use the extraction index from base_filename
         question_key = base_filename.split("_")[-1]

@@ -15,4 +15,5 @@ Write-Host "5. Watch the data appear here!`n" -ForegroundColor White
 
 Write-Host "Press Ctrl+C to stop the server`n" -ForegroundColor Gray
 
-& "P:/Python Projects/DougHub/.venv/Scripts/python.exe" scripts/extraction_server.py
+# Activate virtual environment and run the server
+& "$PSScriptRoot/../.venv/Scripts/python.exe" "$PSScriptRoot/extraction_server.py"
