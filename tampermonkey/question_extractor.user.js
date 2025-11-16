@@ -44,6 +44,13 @@
             choicesSelector: "REPLACE_WITH_MKSAP_CHOICES_SELECTOR",
             explanationSelector: "REPLACE_WITH_MKSAP_EXPLANATION_SELECTOR",
             correctAnswerSelector: "REPLACE_WITH_MKSAP_CORRECT_ANSWER_SELECTOR"
+        },
+        "mksap19.acponline.org": {
+            siteName: "MKSAP 19",
+            questionSelector: "REPLACE_WITH_MKSAP_QUESTION_SELECTOR",
+            choicesSelector: "REPLACE_WITH_MKSAP_CHOICES_SELECTOR",
+            explanationSelector: "REPLACE_WITH_MKSAP_EXPLANATION_SELECTOR",
+            correctAnswerSelector: "REPLACE_WITH_MKSAP_CORRECT_ANSWER_SELECTOR"
         }
     };
 
