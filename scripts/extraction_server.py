@@ -2,6 +2,8 @@
 """
 Local server to receive extracted page data from Tampermonkey script.
 Displays the received data in the terminal for debugging.
+
+Now includes automatic persistence to the SQLite database.
 """
 
 import json
@@ -13,6 +15,12 @@ from pathlib import Path
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from doughub.config import DATABASE_URL, MEDIA_ROOT
+from doughub.models import Base
+from doughub.persistence import QuestionRepository
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -23,6 +31,205 @@ extractions = []
 # Create output directory for saved extractions
 OUTPUT_DIR = Path(__file__).parent.parent / "extractions"
 OUTPUT_DIR.mkdir(exist_ok=True)
+
+# Initialize database connection
+engine = create_engine(DATABASE_URL)
+Base.metadata.create_all(engine)
+SessionLocal = sessionmaker(bind=engine)
+
+# Ensure media root exists
+Path(MEDIA_ROOT).mkdir(parents=True, exist_ok=True)
+
+
+def parse_source_and_key(data: dict, base_filename: str) -> tuple[str, str]:
+    """Extract source name and question key from extraction data.
+
+    Args:
+        data: Extraction data dictionary
+        base_filename: Generated base filename
+
+    Returns:
+        Tuple of (source_name, question_key)
+    """
+    # Get site name from the extraction data
+    site_name = data.get("siteName", "unknown").replace(" ", "_")
+
+    # Extract question key from the URL or use the extraction index
+    url = data.get("url", "")
+
+    # For MKSAP URLs like: https://mksap19.acponline.org/app/question-bank/x3/x3_id/mk19x_3_id_q008
+    # Extract the question ID from the URL
+    if "mksap" in url.lower():
+        parts = url.rstrip("/").split("/")
+        if parts:
+            # Try to get the last part that looks like a question ID
+            last_part = parts[-1]
+            if last_part.startswith("mk") or last_part.startswith("q"):
+                question_key = last_part
+            else:
+                # Fall back to extracting from base_filename
+                question_key = base_filename.split("_")[-1]
+        else:
+            question_key = base_filename.split("_")[-1]
+    # For ACEP URLs, extract similarly
+    elif "acep" in url.lower():
+        # Try to parse question identifier from URL
+        parts = url.rstrip("/").split("/")
+        if parts and len(parts) > 1:
+            question_key = parts[-1] if parts[-1] else parts[-2]
+        else:
+            question_key = base_filename.split("_")[-1]
+    else:
+        # Fallback: use the extraction index from base_filename
+        question_key = base_filename.split("_")[-1]
+
+    return site_name, question_key
+
+
+def copy_image_to_media_root(source_path: Path, source_name: str, question_key: str, img_index: int) -> str:
+    """Copy an image file to the media storage directory.
+
+    Args:
+        source_path: Path to the source image file in extractions/
+        source_name: Name of the source
+        question_key: Question key
+        img_index: Index of the image
+
+    Returns:
+        Relative path to the copied file
+    """
+    source_path = Path(source_path)
+    media_root = Path(MEDIA_ROOT)
+
+    # Create source-specific directory
+    source_dir = media_root / source_name
+    source_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create destination filename
+    ext = source_path.suffix
+    dest_filename = f"{question_key}_img{img_index}{ext}"
+    dest_path = source_dir / dest_filename
+
+    # Copy file if source exists
+    if source_path.exists():
+        import shutil
+
+        shutil.copy2(source_path, dest_path)
+        print(f"   [DB] Copied to media_root: {source_name}/{dest_filename}")
+
+    # Return relative path
+    return f"{source_name}/{dest_filename}"
+
+
+def persist_to_database(data: dict, html_file: Path, json_file: Path, downloaded_images: list, base_filename: str) -> tuple[bool, str | None]:
+    """Persist the extraction to the database.
+
+    Args:
+        data: Extraction data dictionary
+        html_file: Path to saved HTML file
+        json_file: Path to saved JSON file
+        downloaded_images: List of downloaded image metadata
+        base_filename: Base filename for the extraction
+
+    Returns:
+        Tuple of (success: bool, error_message: str or None)
+    """
+    session = None
+    try:
+        session = SessionLocal()
+        repo = QuestionRepository(session)
+
+        # Parse source name and question key
+        source_name, question_key = parse_source_and_key(data, base_filename)
+
+        print(f"[DB] Persisting: {source_name}/{question_key}")
+
+        # Get or create source
+        source = repo.get_or_create_source(name=source_name)
+        source_id: int = source.source_id  # type: ignore
+
+        # Check if question already exists
+        existing_question = repo.get_question_by_source_key(source_id, question_key)
+        if existing_question:
+            print(
+                f"[DB] Question already exists in database: {source_name}/{question_key}"
+            )
+            repo.commit()
+            return True, None
+
+        # Read HTML content
+        html_content = html_file.read_text(encoding="utf-8")
+
+        # Prepare metadata JSON (the data we already saved)
+        with open(json_file, encoding="utf-8") as f:
+            metadata = json.load(f)
+
+        # Create question data
+        question_data = {
+            "source_id": source_id,
+            "source_question_key": question_key,
+            "raw_html": html_content,
+            "raw_metadata_json": json.dumps(metadata),
+            "status": "extracted",
+            "extraction_path": str(json_file.parent / json_file.stem),
+        }
+
+        # Add question to database
+        question = repo.add_question(question_data)
+        question_id: int = question.question_id  # type: ignore
+        print(f"[DB] Added question to database (ID: {question_id})")
+
+        # Process and persist media files
+        for img_info in downloaded_images:
+            if "local_path" not in img_info:
+                continue
+
+            local_path = Path(img_info["local_path"])
+            if not local_path.exists():
+                print(f"[DB] Warning: Image file not found: {local_path}")
+                continue
+
+            # Copy image to media_root
+            relative_path = copy_image_to_media_root(
+                local_path, source_name, question_key, img_info["index"]
+            )
+
+            # Determine MIME type from extension
+            ext = local_path.suffix.lower()
+            mime_types = {
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".png": "image/png",
+                ".gif": "image/gif",
+                ".webp": "image/webp",
+            }
+            mime_type = mime_types.get(ext, "application/octet-stream")
+
+            # Add media record
+            media_data = {
+                "media_role": "image",
+                "media_type": "question_image",
+                "mime_type": mime_type,
+                "relative_path": relative_path,
+            }
+            media = repo.add_media_to_question(question_id, media_data)
+            media_id: int = media.media_id  # type: ignore
+            print(f"[DB]   Added media (ID: {media_id}): {relative_path}")
+
+        # Commit the transaction
+        repo.commit()
+        print("[DB] ✓ Successfully persisted to database")
+        return True, None
+
+    except Exception as e:
+        if session:
+            session.rollback()
+        error_msg = f"Database persistence failed: {e}"
+        print(f"[DB] ✗ {error_msg}", file=sys.stderr)
+        return False, error_msg
+    finally:
+        if session:
+            session.close()
 
 
 def download_images(images, base_filename):
@@ -143,6 +350,11 @@ def receive_extraction():
         print(f"   HTML: {html_file}")
         print(f"   JSON: {json_file}")
 
+        # Persist to database
+        db_success, db_error = persist_to_database(
+            data, html_file, json_file, downloaded_images, base_filename
+        )
+
         # Print body text preview
         body_text = data.get("bodyText", "")
         if body_text:
@@ -162,24 +374,32 @@ def receive_extraction():
         print("\n" + "=" * 80)
         print(f"[OK] Total extractions received: {len(extractions)}")
         print(f"[FILE] View HTML: {html_file.absolute()}")
+        if db_success:
+            print("[DB] ✓ Persisted to database")
+        else:
+            print(f"[DB] ✗ Database error: {db_error}")
         print("=" * 80 + "\n")
 
-        return jsonify(
-            {
-                "status": "success",
-                "message": "Data received successfully",
-                "extraction_count": len(extractions),
-                "files": {
-                    "html": str(html_file),
-                    "json": str(json_file),
-                    "images": [
-                        img.get("local_path")
-                        for img in downloaded_images
-                        if "local_path" in img
-                    ],
-                },
-            }
-        ), 200
+        response_data = {
+            "status": "success",
+            "message": "Data received successfully",
+            "extraction_count": len(extractions),
+            "files": {
+                "html": str(html_file),
+                "json": str(json_file),
+                "images": [
+                    img.get("local_path")
+                    for img in downloaded_images
+                    if "local_path" in img
+                ],
+            },
+            "database": {
+                "persisted": db_success,
+                "error": db_error if not db_success else None,
+            },
+        }
+
+        return jsonify(response_data), 200
 
     except Exception as e:
         print(f"\n[ERROR] ERROR receiving extraction: {e}\n", file=sys.stderr)

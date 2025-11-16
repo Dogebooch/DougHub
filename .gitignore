@@ -67,3 +67,12 @@ extractions/*.jpeg
 extractions/*.png
 extractions/*.gif
 extractions/*.webp
+
+# Database and media storage
+doughub.db
+doughub.db-journal
+media_root/
+
+# Alembic
+alembic.ini
+alembic/

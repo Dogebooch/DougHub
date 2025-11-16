@@ -19,3 +19,9 @@ ENABLE_ANKI_AUTO_LAUNCH: bool = os.getenv(
     "1",
     "yes",
 )
+
+# Database settings
+DATABASE_URL: str = os.getenv(
+    "DATABASE_URL", "sqlite:///doughub.db"
+)
+MEDIA_ROOT: str = os.getenv("MEDIA_ROOT", "media_root")

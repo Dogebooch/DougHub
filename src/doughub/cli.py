@@ -163,5 +163,105 @@ def launch_ui() -> None:
         raise typer.Exit(1) from e
 
 
+# Database inspection commands
+db_app = typer.Typer(help="Database inspection and management commands")
+app.add_typer(db_app, name="db")
+
+
+@db_app.command("show-question")
+def show_question(question_id: int) -> None:
+    """Display detailed information about a specific question.
+
+    Args:
+        question_id: The ID of the question to display.
+    """
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from doughub.config import DATABASE_URL
+    from doughub.persistence import QuestionRepository
+
+    engine = create_engine(DATABASE_URL)
+    SessionLocal = sessionmaker(bind=engine)
+    session = SessionLocal()
+    repo = QuestionRepository(session)
+
+    try:
+        question = repo.get_question_by_id(question_id)
+        if question is None:
+            _print_error(f"Question with ID {question_id} not found")
+            raise typer.Exit(1)
+
+        _print_header(f"Question {question_id}")
+
+        typer.echo(f"Source:       {question.source.name}")
+        typer.echo(f"Source Key:   {question.source_question_key}")
+        typer.echo(f"Status:       {question.status}")
+        typer.echo(f"Created:      {question.created_at}")
+        typer.echo(f"Updated:      {question.updated_at}")
+
+        if question.extraction_path:
+            typer.echo(f"Path:         {question.extraction_path}")
+
+        typer.echo(f"\nHTML Preview: {question.raw_html[:200]}...")
+        typer.echo(f"\nMetadata:     {question.raw_metadata_json[:200]}...")
+
+        if question.media:
+            typer.echo(f"\nMedia Files ({len(question.media)}):")
+            for media in question.media:
+                typer.echo(
+                    f"  - {media.media_role} ({media.mime_type}): {media.relative_path}"
+                )
+        else:
+            typer.echo("\nNo media files")
+
+        typer.echo("")
+
+    finally:
+        session.close()
+        engine.dispose()
+
+
+@db_app.command("source-summary")
+def source_summary() -> None:
+    """Display a summary of all sources and their question counts."""
+    from sqlalchemy import create_engine, select
+    from sqlalchemy.orm import sessionmaker
+
+    from doughub.config import DATABASE_URL
+    from doughub.models import Source
+
+    engine = create_engine(DATABASE_URL)
+    SessionLocal = sessionmaker(bind=engine)
+    session = SessionLocal()
+
+    try:
+        stmt = select(Source)
+        sources = session.execute(stmt).scalars().all()
+
+        if not sources:
+            _print_info("No sources found in the database")
+            return
+
+        _print_header("Source Summary")
+
+        typer.echo(f"{'Source Name':<30} {'Questions':<15} {'Description'}")
+        typer.echo("-" * 70)
+
+        for source in sources:
+            question_count = len(source.questions)
+            desc = source.description or "(no description)"
+            desc_short = desc[:30] + "..." if len(desc) > 30 else desc
+            typer.echo(f"{source.name:<30} {question_count:<15} {desc_short}")
+
+        typer.echo(f"\nTotal sources: {len(sources)}")
+        total_questions = sum(len(s.questions) for s in sources)
+        typer.echo(f"Total questions: {total_questions}\n")
+
+    finally:
+        session.close()
+        engine.dispose()
+
+
 if __name__ == "__main__":
     app()

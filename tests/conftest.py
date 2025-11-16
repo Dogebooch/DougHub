@@ -1,12 +1,17 @@
 """Shared pytest fixtures and configuration for DougHub tests."""
 
+import json
 import logging
 from collections.abc import Generator
+from pathlib import Path
 from typing import Any
 
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
 
 from doughub.anki_client import AnkiRepository
+from doughub.models import Base
 from doughub.utils.anki_process import AnkiProcessManager
 
 # Backward compatibility alias
@@ -150,3 +155,109 @@ def assert_valid_note_structure(note_dict: dict[str, Any]) -> None:
 
     assert "tags" in note_dict, "Note missing 'tags' field"
     assert isinstance(note_dict["tags"], list), "'tags' must be a list"
+
+
+# Persistence layer fixtures
+
+
+@pytest.fixture
+def test_db_session() -> Generator[Session, None, None]:
+    """Create an in-memory SQLite database for testing.
+
+    This fixture creates a fresh database schema, yields a session for the test,
+    and tears everything down afterward.
+
+    Yields:
+        SQLAlchemy session for test database operations.
+    """
+    # Create in-memory SQLite database
+    engine = create_engine("sqlite:///:memory:", echo=False)
+
+    # Create all tables
+    Base.metadata.create_all(engine)
+
+    # Create session factory
+    SessionLocal = sessionmaker(bind=engine)
+    session = SessionLocal()
+
+    try:
+        yield session
+    finally:
+        session.close()
+        Base.metadata.drop_all(engine)
+        engine.dispose()
+
+
+@pytest.fixture
+def synthetic_extraction_dir(tmp_path: Path) -> Generator[Path, None, None]:
+    """Create a temporary directory with synthetic extraction files.
+
+    Creates a structure mimicking the extractions/ directory with:
+    - Valid HTML/JSON pairs with media
+    - Items with missing media
+    - Items with malformed JSON
+
+    Args:
+        tmp_path: Pytest's temporary directory fixture.
+
+    Yields:
+        Path to the temporary extractions directory.
+    """
+    extractions = tmp_path / "extractions"
+    extractions.mkdir()
+
+    # Valid extraction 1: PeerPrep question with 2 images
+    base_name_1 = "20251116_145626_PeerPrep_Q1"
+    html_1 = extractions / f"{base_name_1}.html"
+    json_1 = extractions / f"{base_name_1}.json"
+    img_1_1 = extractions / f"{base_name_1}_img0.jpg"
+    img_1_2 = extractions / f"{base_name_1}_img1.png"
+
+    html_1.write_text("<div>Question 1 HTML</div>", encoding="utf-8")
+    json_1.write_text(
+        json.dumps({"question": "What is X?", "answer": "Y", "images": 2}),
+        encoding="utf-8",
+    )
+    img_1_1.write_bytes(b"fake_jpeg_data")
+    img_1_2.write_bytes(b"fake_png_data")
+
+    # Valid extraction 2: MKSAP question with 1 image
+    base_name_2 = "20251116_150929_MKSAP_19_Q2"
+    html_2 = extractions / f"{base_name_2}.html"
+    json_2 = extractions / f"{base_name_2}.json"
+    img_2_1 = extractions / f"{base_name_2}_img0.jpg"
+
+    html_2.write_text("<div>Question 2 HTML</div>", encoding="utf-8")
+    json_2.write_text(
+        json.dumps({"question": "What is Z?", "answer": "A"}),
+        encoding="utf-8",
+    )
+    img_2_1.write_bytes(b"fake_jpeg_data_2")
+
+    # Valid extraction 3: No images
+    base_name_3 = "20251116_151354_MKSAP_19_Q3"
+    html_3 = extractions / f"{base_name_3}.html"
+    json_3 = extractions / f"{base_name_3}.json"
+
+    html_3.write_text("<div>Question 3 HTML</div>", encoding="utf-8")
+    json_3.write_text(
+        json.dumps({"question": "Simple question?", "answer": "Simple answer"}),
+        encoding="utf-8",
+    )
+
+    # Missing HTML file
+    base_name_4 = "20251116_152000_PeerPrep_Q4"
+    json_4 = extractions / f"{base_name_4}.json"
+    json_4.write_text(
+        json.dumps({"question": "Orphaned JSON?"}),
+        encoding="utf-8",
+    )
+
+    # Malformed JSON
+    base_name_5 = "20251116_152100_MKSAP_19_Q5"
+    html_5 = extractions / f"{base_name_5}.html"
+    json_5 = extractions / f"{base_name_5}.json"
+    html_5.write_text("<div>Question 5 HTML</div>", encoding="utf-8")
+    json_5.write_text("{ this is not valid json }", encoding="utf-8")
+
+    yield extractions
