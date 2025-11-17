@@ -167,6 +167,10 @@ def launch_ui() -> None:
 db_app = typer.Typer(help="Database inspection and management commands")
 app.add_typer(db_app, name="db")
 
+# Notebook commands
+notebook_app = typer.Typer(help="Notebook management commands")
+app.add_typer(notebook_app, name="notebook")
+
 
 @db_app.command("show-question")
 def show_question(question_id: int) -> None:
@@ -257,6 +261,135 @@ def source_summary() -> None:
         typer.echo(f"\nTotal sources: {len(sources)}")
         total_questions = sum(len(s.questions) for s in sources)
         typer.echo(f"Total questions: {total_questions}\n")
+
+    finally:
+        session.close()
+        engine.dispose()
+
+
+@notebook_app.command("check-integrity")
+def check_notebook_integrity() -> None:
+    """Check notebook and database consistency.
+
+    Validates:
+    - Database records with note_path point to existing files
+    - Note files have matching question_uid in frontmatter
+    - Note files in the filesystem have corresponding database records
+    - Reports orphaned notes and missing files
+    """
+    from pathlib import Path
+
+    from sqlalchemy import create_engine, select
+    from sqlalchemy.orm import sessionmaker
+
+    from doughub.config import DATABASE_URL, NOTES_DIR
+    from doughub.models import Question
+    from doughub.notebook.sync import _parse_note_frontmatter
+
+    _print_header("Notebook Integrity Check")
+
+    engine = create_engine(DATABASE_URL)
+    SessionLocal = sessionmaker(bind=engine)
+    session = SessionLocal()
+
+    errors = []
+    warnings = []
+
+    try:
+        notes_dir = Path(NOTES_DIR)
+
+        # Check 1: DB -> Filesystem
+        _print_info("Checking database records...")
+        stmt = select(Question).where(Question.note_path.isnot(None))
+        questions_with_notes = session.execute(stmt).scalars().all()
+
+        for question in questions_with_notes:
+            note_path = Path(question.note_path)
+
+            # Check if file exists
+            if not note_path.exists():
+                errors.append(
+                    f"Missing note file: question_id={question.question_id}, "
+                    f"expected path={question.note_path}"
+                )
+                continue
+
+            # Parse frontmatter and verify question_id matches
+            try:
+                metadata = _parse_note_frontmatter(note_path)
+                if metadata is None:
+                    warnings.append(
+                        f"No frontmatter in note: question_id={question.question_id}, "
+                        f"path={question.note_path}"
+                    )
+                elif metadata.get("question_id") != question.question_id:
+                    errors.append(
+                        f"Question ID mismatch: DB={question.question_id}, "
+                        f"note={metadata.get('question_id')}, path={question.note_path}"
+                    )
+            except Exception as e:
+                errors.append(
+                    f"Failed to parse note: question_id={question.question_id}, "
+                    f"path={question.note_path}, error={e}"
+                )
+
+        # Check 2: Filesystem -> DB
+        _print_info("Checking note files...")
+        if notes_dir.exists():
+            for note_file in notes_dir.rglob("*.md"):
+                try:
+                    metadata = _parse_note_frontmatter(note_file)
+                    if metadata is None:
+                        # Skip files without frontmatter
+                        continue
+
+                    question_id = metadata.get("question_id")
+                    if question_id is None:
+                        warnings.append(
+                            f"Note missing question_id in frontmatter: {note_file}"
+                        )
+                        continue
+
+                    # Check if question exists in DB
+                    stmt = select(Question).where(Question.question_id == question_id)
+                    question = session.execute(stmt).scalar_one_or_none()
+
+                    if question is None:
+                        errors.append(
+                            f"Orphaned note file: question_id={question_id}, "
+                            f"path={note_file}"
+                        )
+                    elif question.note_path != str(note_file):
+                        warnings.append(
+                            f"Note path mismatch: question_id={question_id}, "
+                            f"DB path={question.note_path}, actual path={note_file}"
+                        )
+
+                except Exception as e:
+                    warnings.append(f"Failed to parse note file: {note_file}, error={e}")
+
+        # Print summary
+        _print_header("Integrity Check Results")
+
+        typer.echo(f"Questions with notes: {len(questions_with_notes)}")
+
+        if not errors and not warnings:
+            _print_success("No issues found. Notebook integrity is good.")
+        else:
+            if errors:
+                typer.echo(f"\n✗ Found {len(errors)} error(s):")
+                for error in errors:
+                    typer.secho(f"  - {error}", fg=typer.colors.RED)
+
+            if warnings:
+                typer.echo(f"\n⚠ Found {len(warnings)} warning(s):")
+                for warning in warnings:
+                    typer.secho(f"  - {warning}", fg=typer.colors.YELLOW)
+
+        typer.echo("")
+
+        if errors:
+            raise typer.Exit(1)
 
     finally:
         session.close()

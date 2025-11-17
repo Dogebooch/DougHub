@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import QTableView, QVBoxLayout, QWidget
 
 from doughub.anki_client.repository import AnkiRepository
 from doughub.models import Note
+from doughub.persistence.repository import QuestionRepository
 
 logger = logging.getLogger(__name__)
 
@@ -143,18 +144,24 @@ class DeckBrowserView(QWidget):
     """
 
     note_selected = pyqtSignal(int)  # Emits note ID when double-clicked
+    note_ready_for_navigation = pyqtSignal(str)  # Emits note path when ready for notebook navigation
 
     def __init__(
-        self, repository: AnkiRepository, parent: QWidget | None = None
+        self,
+        repository: AnkiRepository,
+        question_repository: QuestionRepository | None = None,
+        parent: QWidget | None = None,
     ) -> None:
         """Initialize the deck browser view.
 
         Args:
             repository: AnkiRepository instance for fetching notes.
+            question_repository: Optional QuestionRepository for notebook integration.
             parent: Optional parent widget.
         """
         super().__init__(parent)
         self.repository = repository
+        self.question_repository = question_repository
         self._current_deck: str | None = None
         self._setup_ui()
         self._connect_signals()
@@ -189,12 +196,31 @@ class DeckBrowserView(QWidget):
     def _on_row_double_clicked(self, index: QModelIndex) -> None:
         """Handle double-click on a table row.
 
+        Ensures a markdown note exists for the selected Anki note,
+        then emits signals for both editor opening and notebook navigation.
+
         Args:
             index: Model index of the clicked cell.
         """
         note = self.model.get_note(index.row())
         if note:
             logger.debug(f"Note double-clicked: {note.note_id}")
+
+            # Ensure a markdown note exists for this Anki note (if question_repository available)
+            if self.question_repository:
+                try:
+                    # For Phase 2, use note_id as a temporary question identifier
+                    # This assumes a 1:1 mapping or that ensure_note_for_question creates as needed
+                    note_path = self.question_repository.ensure_note_for_question(note.note_id)
+
+                    # Emit navigation signal after note file is guaranteed to exist
+                    if note_path:
+                        logger.debug(f"Note ready for navigation: {note_path}")
+                        self.note_ready_for_navigation.emit(note_path)
+                except Exception as e:
+                    logger.error(f"Failed to ensure note for {note.note_id}: {e}")
+
+            # Emit the original signal for editor view
             self.note_selected.emit(note.note_id)
 
     def load_deck(self, deck_name: str) -> None:

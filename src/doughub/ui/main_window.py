@@ -11,9 +11,12 @@ from PyQt6.QtWidgets import (
 )
 
 from doughub.anki_client.repository import AnkiRepository
+from doughub.notebook.manager import NotesiumManager
+from doughub.persistence.repository import QuestionRepository
 from doughub.ui.card_editor_view import CardEditorView
 from doughub.ui.deck_browser_view import DeckBrowserView
 from doughub.ui.deck_list_panel import DeckListPanel
+from doughub.ui.notebook_view import NotebookView
 
 
 class MainWindow(QMainWindow):
@@ -24,16 +27,24 @@ class MainWindow(QMainWindow):
     """
 
     def __init__(
-        self, repository: AnkiRepository, parent: QWidget | None = None
+        self,
+        repository: AnkiRepository,
+        notesium_manager: NotesiumManager,
+        question_repository: QuestionRepository | None = None,
+        parent: QWidget | None = None,
     ) -> None:
         """Initialize the main window.
 
         Args:
             repository: AnkiRepository instance for backend operations.
+            notesium_manager: NotesiumManager instance for notebook features.
+            question_repository: Optional QuestionRepository for notebook integration.
             parent: Optional parent widget.
         """
         super().__init__(parent)
         self.repository = repository
+        self.notesium_manager = notesium_manager
+        self.question_repository = question_repository
         self._setup_ui()
         self._connect_signals()
 
@@ -63,18 +74,20 @@ class MainWindow(QMainWindow):
         toolbar.addStretch()
         layout.addLayout(toolbar)
 
-        # Main splitter
+        # Main splitter (horizontal: left deck list, middle browser/editor, right notebook)
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
 
         # Left side: deck list panel
         self.deck_list_panel = DeckListPanel(self.repository)
         self.splitter.addWidget(self.deck_list_panel)
 
-        # Right side (stacked widget for browser/editor)
+        # Middle: stacked widget for browser/editor
         self.stacked_widget = QStackedWidget()
 
         # Add deck browser view
-        self.deck_browser = DeckBrowserView(self.repository)
+        self.deck_browser = DeckBrowserView(
+            self.repository, self.question_repository
+        )
         self.stacked_widget.addWidget(self.deck_browser)
 
         # Add card editor view
@@ -83,8 +96,24 @@ class MainWindow(QMainWindow):
 
         self.splitter.addWidget(self.stacked_widget)
 
-        # Set initial sizes for the splitter
-        self.splitter.setSizes([300, 900])
+        # Right side: notebook view
+        self.notebook_view = NotebookView()
+        self.splitter.addWidget(self.notebook_view)
+
+        # Initialize notebook view based on Notesium status
+        if self.notesium_manager.is_healthy():
+            self.notebook_view.load_url(self.notesium_manager.url)
+        else:
+            self.notebook_view.show_error(
+                "Notebook features are unavailable.\n\n"
+                "The Notesium server failed to start. Please ensure:\n"
+                "• Node.js and npm are installed\n"
+                "• Port 3030 is available\n\n"
+                "Check the logs for more details."
+            )
+
+        # Set initial sizes for the splitter (deck list: 250, browser: 550, notebook: 400)
+        self.splitter.setSizes([250, 550, 400])
 
         # Add splitter to the main layout
         layout.addWidget(self.splitter)
@@ -99,6 +128,7 @@ class MainWindow(QMainWindow):
         self.add_note_button.clicked.connect(self._on_add_note_clicked)
         self.deck_list_panel.deck_selected.connect(self._on_deck_selected)
         self.deck_browser.note_selected.connect(self._on_note_selected)
+        self.deck_browser.note_ready_for_navigation.connect(self.notebook_view.open_note)
         self.card_editor.note_saved.connect(self._on_note_saved)
         self.card_editor.cancelled.connect(self._on_editor_cancelled)
 
