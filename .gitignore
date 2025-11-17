@@ -76,3 +76,6 @@ media_root/
 # Alembic
 alembic.ini
 alembic/
+
+# Node.js
+node_modules/
