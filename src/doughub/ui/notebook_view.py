@@ -33,7 +33,9 @@ class NotebookView(QWidget):
 
         # Web engine view for Notesium
         self.web_view = QWebEngineView()
+        self.web_view.loadFinished.connect(self._on_load_finished)
         layout.addWidget(self.web_view)
+        logger.info("NotebookView UI setup complete")
 
         # Error label (hidden by default)
         self.error_label = QLabel()
@@ -51,10 +53,35 @@ class NotebookView(QWidget):
         Args:
             url: URL of the Notesium server.
         """
-        logger.info(f"Loading Notesium at {url}")
+        logger.info(f"NotebookView.load_url called with: {url}")
         self.web_view.show()
         self.error_label.hide()
-        self.web_view.setUrl(QUrl(url))
+        qurl = QUrl(url)
+        logger.debug(f"QUrl created - valid: {qurl.isValid()}, scheme: {qurl.scheme()}, host: {qurl.host()}, port: {qurl.port()}")
+        self.web_view.setUrl(qurl)
+        logger.info("QWebEngineView.setUrl called, waiting for load to complete...")
+
+    @pyqtSlot(bool)
+    def _on_load_finished(self, ok: bool) -> None:
+        """Handle web view load completion.
+
+        Args:
+            ok: True if the load was successful, False otherwise.
+        """
+        if ok:
+            logger.info(f"NotebookView successfully loaded: {self.web_view.url().toString()}")
+        else:
+            error_msg = f"NotebookView failed to load: {self.web_view.url().toString()}"
+            logger.error(error_msg)
+            self.show_error(
+                "Failed to load Notesium interface.\n\n"
+                f"URL: {self.web_view.url().toString()}\n\n"
+                "The page could not be loaded. This may indicate:\n"
+                "• The Notesium server is not responding\n"
+                "• Network connectivity issues\n"
+                "• Browser security restrictions\n\n"
+                "Check the logs for more details."
+            )
 
     def show_error(self, message: str) -> None:
         """Display an error message instead of the web view.

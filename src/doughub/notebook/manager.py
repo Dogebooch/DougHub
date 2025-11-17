@@ -1,12 +1,13 @@
 """Manager for Notesium subprocess lifecycle."""
 
 import logging
+import os
 import subprocess
 import time
 from pathlib import Path
 from typing import Any
 
-import requests
+import httpx
 
 from doughub import config
 
@@ -63,22 +64,51 @@ class NotesiumManager:
 
         # Start Notesium process
         try:
-            # Using npx to run notesium without global installation
+            # Notesium is a standalone Go binary that needs to be installed separately
+            # See: https://github.com/alonswartz/notesium
+            import shutil
+            
+            # Try to find notesium in PATH
+            notesium_path = shutil.which("notesium")
+            if not notesium_path:
+                # Try common Windows locations
+                import platform
+                if platform.system() == "Windows":
+                    possible_locations = [
+                        Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "notesium" / "notesium.exe",
+                        Path.home() / "AppData" / "Local" / "Programs" / "notesium" / "notesium.exe",
+                        Path("C:/Program Files/notesium/notesium.exe"),
+                    ]
+                    for loc in possible_locations:
+                        if loc.exists():
+                            notesium_path = str(loc)
+                            logger.info(f"Found notesium at: {notesium_path}")
+                            break
+            
+            if not notesium_path:
+                raise FileNotFoundError("notesium binary not found in PATH or common locations")
+            
             cmd = [
-                "npx",
-                "-y",
-                "notesium",
-                "--port",
-                str(self.port),
-                "--root",
-                str(self.notes_dir),
+                notesium_path,
+                "web",
+                f"--port={self.port}",
+                "--writable",
             ]
-            logger.info(f"Starting Notesium: {' '.join(cmd)}")
+            
+            logger.info(f"Starting Notesium with command: {' '.join(cmd)}")
+            logger.debug(f"Working directory: {Path.cwd()}")
+            logger.debug(f"Notes directory (absolute): {self.notes_dir.absolute()}")
+            
+            # Set NOTESIUM_DIR environment variable for the subprocess
+            env = os.environ.copy()
+            env["NOTESIUM_DIR"] = str(self.notes_dir.absolute())
+            logger.debug(f"Setting NOTESIUM_DIR={env['NOTESIUM_DIR']}")
 
             self.process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
+                env=env,
                 creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
             )
 
@@ -93,39 +123,72 @@ class NotesiumManager:
 
                 # Check if process died
                 if self.process.poll() is not None:
+                    stdout = self.process.stdout.read().decode() if self.process.stdout else ""
                     stderr = self.process.stderr.read().decode() if self.process.stderr else ""
-                    logger.error(f"Notesium process terminated unexpectedly: {stderr}")
+                    logger.error(f"Notesium process terminated unexpectedly")
+                    logger.error(f"Exit code: {self.process.returncode}")
+                    if stdout:
+                        logger.error(f"STDOUT: {stdout}")
+                    if stderr:
+                        logger.error(f"STDERR: {stderr}")
                     return False
 
             logger.error(f"Notesium failed health check after {max_attempts} attempts")
+            # Try to capture any output before stopping
+            if self.process and self.process.poll() is None:
+                logger.warning("Process still running but health check failed")
+            elif self.process:
+                stdout = self.process.stdout.read().decode() if self.process.stdout else ""
+                stderr = self.process.stderr.read().decode() if self.process.stderr else ""
+                if stdout:
+                    logger.error(f"Process STDOUT: {stdout}")
+                if stderr:
+                    logger.error(f"Process STDERR: {stderr}")
             self.stop()
             return False
 
-        except FileNotFoundError:
-            logger.error("npx not found. Please ensure Node.js and npm are installed.")
+        except FileNotFoundError as e:
+            logger.error(
+                f"'notesium' binary not found in PATH. "
+                f"Please install Notesium from https://github.com/alonswartz/notesium/releases/latest. "
+                f"Error: {e}"
+            )
             return False
         except Exception as e:
             logger.exception(f"Failed to start Notesium: {e}")
+            if self.process:
+                try:
+                    stdout = self.process.stdout.read().decode() if self.process.stdout else ""
+                    stderr = self.process.stderr.read().decode() if self.process.stderr else ""
+                    if stdout:
+                        logger.error(f"Process STDOUT: {stdout}")
+                    if stderr:
+                        logger.error(f"Process STDERR: {stderr}")
+                except Exception as read_err:
+                    logger.error(f"Could not read process output: {read_err}")
             self.stop()
             return False
 
     def stop(self) -> None:
         """Stop the Notesium server if it's running."""
         if self.process:
+            logger.info("Stopping Notesium process...")
             try:
                 self.process.terminate()
                 try:
                     self.process.wait(timeout=5)
                 except subprocess.TimeoutExpired:
-                    logger.warning("Notesium didn't terminate, forcing kill")
+                    logger.warning("Notesium didn't terminate gracefully, forcing kill")
                     self.process.kill()
                     self.process.wait()
-                logger.info("Notesium stopped")
+                logger.info("Notesium process stopped successfully")
             except Exception as e:
                 logger.error(f"Error stopping Notesium: {e}")
             finally:
                 self.process = None
                 self._is_healthy = False
+        else:
+            logger.debug("No Notesium process to stop")
 
     def is_healthy(self) -> bool:
         """Check if the Notesium server is currently healthy.
@@ -142,9 +205,13 @@ class NotesiumManager:
             True if the server responds, False otherwise.
         """
         try:
-            response = requests.get(self.url, timeout=2)
+            logger.debug(f"Health check: requesting {self.url}")
+            with httpx.Client() as client:
+                response = client.get(self.url, timeout=2.0)
+            logger.debug(f"Health check response: {response.status_code}")
             return bool(response.status_code == 200)
-        except requests.RequestException:
+        except (httpx.RequestError, httpx.HTTPStatusError) as e:
+            logger.debug(f"Health check failed: {e}")
             return False
 
     def _check_port_in_use(self) -> bool:
@@ -154,9 +221,10 @@ class NotesiumManager:
             True if the port is in use, False otherwise.
         """
         try:
-            requests.get(self.url, timeout=1)
+            with httpx.Client() as client:
+                client.get(self.url, timeout=1.0)
             return True
-        except requests.RequestException:
+        except (httpx.RequestError, httpx.HTTPStatusError):
             return False
 
     def __enter__(self) -> "NotesiumManager":

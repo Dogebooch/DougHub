@@ -97,17 +97,25 @@ class MainWindow(QMainWindow):
         self.splitter.addWidget(self.stacked_widget)
 
         # Right side: notebook view
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info("Creating NotebookView widget...")
         self.notebook_view = NotebookView()
+        logger.info("Adding NotebookView to splitter...")
         self.splitter.addWidget(self.notebook_view)
 
         # Initialize notebook view based on Notesium status
+        logger.info(f"Checking Notesium health status...")
         if self.notesium_manager.is_healthy():
+            logger.info(f"Notesium is healthy, loading URL: {self.notesium_manager.url}")
             self.notebook_view.load_url(self.notesium_manager.url)
         else:
+            logger.warning("Notesium is not healthy, showing error message in UI")
             self.notebook_view.show_error(
                 "Notebook features are unavailable.\n\n"
                 "The Notesium server failed to start. Please ensure:\n"
-                "• Node.js and npm are installed\n"
+                "• Notesium binary is installed and in your PATH\n"
+                "  Download from: https://github.com/alonswartz/notesium/releases/latest\n"
                 "• Port 3030 is available\n\n"
                 "Check the logs for more details."
             )
