@@ -20,3 +20,47 @@ SPACING_L = 24
 FONT_SIZE_S = 12
 FONT_SIZE_M = 14
 FONT_SIZE_L = 18
+
+STYLESHEET = """
+#sectionHeader {
+    font-size: 14pt;
+    font-weight: bold;
+    color: #333;
+    margin-top: 10px;
+    margin-bottom: 5px;
+}
+
+#detailsScrollArea {
+    border: none;
+    background-color: #fcfcfc;
+}
+
+#placeholderLabel {
+    font-size: 12pt;
+    color: #888;
+}
+
+QFrame#answerFrame {
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 10px;
+    background-color: #fff;
+}
+
+QFrame#answerFrame[correct="true"] {
+    background-color: #e8f5e9; /* A light green */
+    border-color: #a5d6a7;
+}
+
+QProgressBar {
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #eee;
+}
+
+QProgressBar::chunk {
+    background-color: #64b5f6; /* A pleasant blue */
+    width: 10px;
+    margin: 0.5px;
+}
+"""

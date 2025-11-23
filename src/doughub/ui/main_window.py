@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
     QSplitter,
     QStackedWidget,
     QStatusBar,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -16,14 +17,18 @@ from doughub.persistence.repository import QuestionRepository
 from doughub.ui.card_editor_view import CardEditorView
 from doughub.ui.deck_browser_view import DeckBrowserView
 from doughub.ui.deck_list_panel import DeckListPanel
+from doughub.ui.dto import QuestionDTO
+from doughub.ui.manage_group_dialog import ManageGroupDialog
 from doughub.ui.notebook_view import NotebookView
+from doughub.ui.question_browser_view import QuestionBrowserView
+from doughub.ui.question_detail_view import QuestionDetailView
 
 
 class MainWindow(QMainWindow):
     """Main window for the DougHub application.
 
-    Provides a split-pane interface with deck list on the left
-    and deck browser/card editor on the right.
+    Provides a tabbed interface with Anki deck management and
+    extracted question browsing.
     """
 
     def __init__(
@@ -48,6 +53,10 @@ class MainWindow(QMainWindow):
         self._setup_ui()
         self._connect_signals()
 
+        # Load questions if repository is available
+        if self.question_repository:
+            self.question_browser.load_questions(self.question_repository.session)
+
     def _setup_ui(self) -> None:
         """Set up the main window UI components."""
 
@@ -67,19 +76,27 @@ class MainWindow(QMainWindow):
 
         layout = QVBoxLayout(self.central_widget)
 
-        # Add toolbar with Add Note button
+        # Main Tab Widget
+        self.tab_widget = QTabWidget()
+        layout.addWidget(self.tab_widget)
+
+        # --- Anki Tab ---
+        anki_tab = QWidget()
+        anki_layout = QVBoxLayout(anki_tab)
+
+        # Add toolbar with Add Note button (Anki specific)
         toolbar = QHBoxLayout()
         self.add_note_button = QPushButton("Add Note")
         toolbar.addWidget(self.add_note_button)
         toolbar.addStretch()
-        layout.addLayout(toolbar)
+        anki_layout.addLayout(toolbar)
 
-        # Main splitter (horizontal: left deck list, middle browser/editor, right notebook)
-        self.splitter = QSplitter(Qt.Orientation.Horizontal)
+        # Anki splitter (horizontal: left deck list, middle browser/editor, right notebook)
+        self.anki_splitter = QSplitter(Qt.Orientation.Horizontal)
 
         # Left side: deck list panel
         self.deck_list_panel = DeckListPanel(self.repository)
-        self.splitter.addWidget(self.deck_list_panel)
+        self.anki_splitter.addWidget(self.deck_list_panel)
 
         # Middle: stacked widget for browser/editor
         self.stacked_widget = QStackedWidget()
@@ -94,7 +111,7 @@ class MainWindow(QMainWindow):
         self.card_editor = CardEditorView(self.repository)
         self.stacked_widget.addWidget(self.card_editor)
 
-        self.splitter.addWidget(self.stacked_widget)
+        self.anki_splitter.addWidget(self.stacked_widget)
 
         # Right side: notebook view
         import logging
@@ -102,10 +119,10 @@ class MainWindow(QMainWindow):
         logger.info("Creating NotebookView widget...")
         self.notebook_view = NotebookView()
         logger.info("Adding NotebookView to splitter...")
-        self.splitter.addWidget(self.notebook_view)
+        self.anki_splitter.addWidget(self.notebook_view)
 
         # Initialize notebook view based on Notesium status
-        logger.info(f"Checking Notesium health status...")
+        logger.info("Checking Notesium health status...")
         if self.notesium_manager.is_healthy():
             logger.info(f"Notesium is healthy, loading URL: {self.notesium_manager.url}")
             self.notebook_view.load_url(self.notesium_manager.url)
@@ -121,10 +138,27 @@ class MainWindow(QMainWindow):
             )
 
         # Set initial sizes for the splitter (deck list: 250, browser: 550, notebook: 400)
-        self.splitter.setSizes([250, 550, 400])
+        self.anki_splitter.setSizes([250, 550, 400])
 
-        # Add splitter to the main layout
-        layout.addWidget(self.splitter)
+        anki_layout.addWidget(self.anki_splitter)
+        self.tab_widget.addTab(anki_tab, "Anki")
+
+        # --- Extracted Questions Tab ---
+        questions_tab = QWidget()
+        questions_layout = QVBoxLayout(questions_tab)
+
+        self.questions_splitter = QSplitter(Qt.Orientation.Horizontal)
+
+        self.question_browser = QuestionBrowserView()
+        self.questions_splitter.addWidget(self.question_browser)
+
+        self.question_detail_view = QuestionDetailView()
+        self.questions_splitter.addWidget(self.question_detail_view)
+
+        self.questions_splitter.setSizes([300, 900])
+
+        questions_layout.addWidget(self.questions_splitter)
+        self.tab_widget.addTab(questions_tab, "Extracted Questions")
 
         # Create status bar
         self.status_bar = QStatusBar()
@@ -139,6 +173,64 @@ class MainWindow(QMainWindow):
         self.deck_browser.note_ready_for_navigation.connect(self.notebook_view.open_note)
         self.card_editor.note_saved.connect(self._on_note_saved)
         self.card_editor.cancelled.connect(self._on_editor_cancelled)
+
+        self.question_browser.question_selected.connect(self._on_question_selected)
+        self.question_browser.manage_group_requested.connect(self._on_manage_group_requested)
+
+    @pyqtSlot(int)
+    def _on_manage_group_requested(self, question_id: int) -> None:
+        """Handle request to manage a question group."""
+        if not self.question_repository:
+            return
+
+        question = self.question_repository.get_question_by_id(question_id)
+        if not question:
+            return
+
+        dialog = ManageGroupDialog(question, self)
+        dialog.unlink_requested.connect(self._on_unlink_question)
+        dialog.exec()
+
+    @pyqtSlot(int)
+    def _on_unlink_question(self, child_id: int) -> None:
+        """Handle request to unlink a child question."""
+        if not self.question_repository:
+            return
+
+        try:
+            # Use the session from repository
+            session = self.question_repository.session
+            # We can fetch the child directly using the repository helper if available,
+            # or query the session. Since we have the ID, let's use the repository.
+            child = self.question_repository.get_question_by_id(child_id)
+            if child:
+                child.parent_id = None  # type: ignore
+                session.commit()
+                self.show_status(f"Unlinked question {child_id}")
+                # Refresh browser
+                self.question_browser.load_questions(session)
+        except Exception as e:
+            self.show_status(f"Error unlinking question: {e}")
+            import logging
+            logging.getLogger(__name__).error(f"Error unlinking question {child_id}: {e}", exc_info=True)
+
+    @pyqtSlot(int)
+    def _on_question_selected(self, question_id: int) -> None:
+        """Handle question selection from the browser view."""
+        if not self.question_repository:
+            return
+
+        try:
+            question = self.question_repository.get_question_by_id(question_id)
+            if question:
+                dto = QuestionDTO.from_model(question)
+                self.question_detail_view.set_question(dto)
+            else:
+                self.question_detail_view.set_question(None)
+        except Exception as e:
+            self.show_status(f"Error loading question details: {e}")
+            import logging
+            logging.getLogger(__name__).error(f"Error loading question {question_id}: {e}", exc_info=True)
 
     @pyqtSlot(str)
     def _on_deck_selected(self, deck_name: str) -> None:

@@ -67,7 +67,7 @@ class NotesiumManager:
             # Notesium is a standalone Go binary that needs to be installed separately
             # See: https://github.com/alonswartz/notesium
             import shutil
-            
+
             # Try to find notesium in PATH
             notesium_path = shutil.which("notesium")
             if not notesium_path:
@@ -84,21 +84,21 @@ class NotesiumManager:
                             notesium_path = str(loc)
                             logger.info(f"Found notesium at: {notesium_path}")
                             break
-            
+
             if not notesium_path:
                 raise FileNotFoundError("notesium binary not found in PATH or common locations")
-            
+
             cmd = [
                 notesium_path,
                 "web",
                 f"--port={self.port}",
                 "--writable",
             ]
-            
+
             logger.info(f"Starting Notesium with command: {' '.join(cmd)}")
             logger.debug(f"Working directory: {Path.cwd()}")
             logger.debug(f"Notes directory (absolute): {self.notes_dir.absolute()}")
-            
+
             # Set NOTESIUM_DIR environment variable for the subprocess
             env = os.environ.copy()
             env["NOTESIUM_DIR"] = str(self.notes_dir.absolute())
@@ -125,7 +125,7 @@ class NotesiumManager:
                 if self.process.poll() is not None:
                     stdout = self.process.stdout.read().decode() if self.process.stdout else ""
                     stderr = self.process.stderr.read().decode() if self.process.stderr else ""
-                    logger.error(f"Notesium process terminated unexpectedly")
+                    logger.error("Notesium process terminated unexpectedly")
                     logger.error(f"Exit code: {self.process.returncode}")
                     if stdout:
                         logger.error(f"STDOUT: {stdout}")

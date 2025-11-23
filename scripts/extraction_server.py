@@ -10,16 +10,16 @@ import json
 import sys
 import urllib.parse
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from sqlalchemy import create_engine
+from sqlalchemy import and_, create_engine
 from sqlalchemy.orm import sessionmaker
 
 from doughub.config import DATABASE_URL, MEDIA_ROOT
-from doughub.models import Base
+from doughub.models import Base, Question
 from doughub.persistence import QuestionRepository
 
 app = Flask(__name__)
@@ -111,6 +111,26 @@ def copy_image_to_media_root(source_path: Path, source_name: str, question_key: 
     return f"{source_name}/{dest_filename}"
 
 
+def _group_question_automatically(new_question: Question, session):
+    """Try to link a new question to a recent, ungrouped parent from the same source."""
+    # Heuristic: Link if from the same source and within 5 minutes
+    time_window = timedelta(minutes=5)
+
+    potential_parent = session.query(Question).filter(
+        and_(
+            Question.source_id == new_question.source_id,
+            Question.parent_id.is_(None),
+            Question.question_id != new_question.question_id,
+            Question.created_at >= (new_question.created_at - time_window),
+            Question.created_at < new_question.created_at
+        )
+    ).order_by(Question.created_at.desc()).first()
+
+    if potential_parent:
+        new_question.parent_id = potential_parent.question_id
+        print(f"[DB] Automatically grouped question {new_question.question_id} under parent {potential_parent.question_id}")
+
+
 def persist_to_database(data: dict, html_file: Path, json_file: Path, downloaded_images: list, base_filename: str) -> tuple[bool, str | None]:
     """Persist the extraction to the database.
 
@@ -168,6 +188,9 @@ def persist_to_database(data: dict, html_file: Path, json_file: Path, downloaded
         question = repo.add_question(question_data)
         question_id: int = question.question_id  # type: ignore
         print(f"[DB] Added question to database (ID: {question_id})")
+
+        # Attempt to group this new question automatically
+        _group_question_automatically(question, session)
 
         # Process and persist media files
         for img_info in downloaded_images:

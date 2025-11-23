@@ -14,6 +14,7 @@ from doughub.notebook.manager import NotesiumManager
 from doughub.notebook.sync import scan_and_parse_notes
 from doughub.persistence.repository import QuestionRepository
 from doughub.ui.main_window import MainWindow
+from doughub.ui.styles import STYLESHEET
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,7 @@ def main() -> int:
     # Create Qt application
     app = QApplication(sys.argv)
     app.setApplicationName("DougHub")
+    app.setStyleSheet(STYLESHEET)
 
     # Initialize Notesium manager
     notesium_manager = NotesiumManager()

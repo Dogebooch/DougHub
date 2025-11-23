@@ -12,7 +12,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, backref, mapped_column, relationship
 from sqlalchemy.sql import func
 
 
@@ -80,10 +80,12 @@ class Question(Base):
     state: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at = Column(DateTime, default=func.now(), nullable=False)
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    parent_id = Column(Integer, ForeignKey("questions.question_id"), nullable=True)
 
     # Relationships
     source = relationship("Source", back_populates="questions")
     media = relationship("Media", back_populates="question", cascade="all, delete-orphan")
+    children = relationship("Question", backref=backref('parent', remote_side=[question_id]), cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"<Question(id={self.question_id}, source_key='{self.source_question_key}', status='{self.status}')>"

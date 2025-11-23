@@ -3,7 +3,6 @@
 from pathlib import Path
 
 import pytest
-import yaml
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
