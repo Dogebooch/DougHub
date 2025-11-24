@@ -48,6 +48,7 @@ markers = [
     "contract_stage1: Stage 1 - Handshake with live AnkiConnect",
     "contract_stage2: Stage 2 - Core contract checks for required actions",
     "contract_stage3: Stage 3 - Negative-path and robustness checks",
+    "extraction_preflight: Runs the full validation suite for the question extraction pipeline (HTML, JSON, content, persistence, UI)",
 ]
 asyncio_mode = "auto"
 

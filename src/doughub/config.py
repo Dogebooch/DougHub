@@ -32,3 +32,14 @@ NOTES_DIR: str = os.getenv(
     os.path.join(os.path.expanduser("~"), ".doughub", "notes")
 )
 NOTESIUM_PORT: int = int(os.getenv("NOTESIUM_PORT", "3030"))
+
+# LLM Extraction settings
+LLM_API_ENDPOINT: str = os.getenv("LLM_API_ENDPOINT", "")
+LLM_API_KEY: str = os.getenv("LLM_API_KEY", "")
+LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt-4")
+LLM_TIMEOUT: float = float(os.getenv("LLM_TIMEOUT", "30.0"))
+ENABLE_LLM_EXTRACTION: bool = os.getenv("ENABLE_LLM_EXTRACTION", "false").lower() in (
+    "true",
+    "1",
+    "yes",
+)

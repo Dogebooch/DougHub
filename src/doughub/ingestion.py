@@ -8,15 +8,156 @@ import json
 import logging
 import shutil
 from pathlib import Path
+from typing import Any
 
+import httpx
+from pydantic import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 import doughub.config as config
 from doughub.models import Base
 from doughub.persistence import QuestionRepository
+from doughub.ui.dto import MinimalQuestionBatch
 
 logger = logging.getLogger(__name__)
+
+
+def load_extraction_prompt() -> str:
+    """Load the LLM extraction prompt from the prompts directory.
+
+    Returns:
+        The prompt text as a string.
+
+    Raises:
+        FileNotFoundError: If the prompt file is not found.
+    """
+    prompt_path = Path(__file__).parent / "prompts" / "extract_minimal_question.llm.prompt"
+    if not prompt_path.exists():
+        raise FileNotFoundError(f"LLM extraction prompt not found at {prompt_path}")
+    
+    return prompt_path.read_text(encoding="utf-8")
+
+
+def call_extraction_llm(html_content: str) -> MinimalQuestionBatch:
+    """Call an external LLM to extract question context and stem from raw HTML.
+
+    Args:
+        html_content: Raw HTML content containing the question.
+
+    Returns:
+        MinimalQuestionBatch containing extracted question data.
+
+    Raises:
+        ValueError: If LLM extraction is not enabled or not configured.
+        httpx.HTTPError: If the HTTP request to the LLM fails.
+        ValidationError: If the LLM response does not match the expected schema.
+        json.JSONDecodeError: If the LLM returns invalid JSON.
+    """
+    if not config.ENABLE_LLM_EXTRACTION:
+        raise ValueError(
+            "LLM extraction is not enabled. Set ENABLE_LLM_EXTRACTION=true in environment."
+        )
+    
+    if not config.LLM_API_ENDPOINT:
+        raise ValueError(
+            "LLM_API_ENDPOINT is not configured. Please set it in environment variables."
+        )
+    
+    # Load the prompt template
+    prompt_template = load_extraction_prompt()
+    
+    # Construct the full prompt with the HTML content
+    full_prompt = f"{prompt_template}\n\n```html\n{html_content}\n```"
+    
+    # Prepare the API request payload
+    # This is a generic format that works with OpenAI-compatible APIs
+    payload: dict[str, Any] = {
+        "model": config.LLM_MODEL,
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are an expert medical question extraction system. Always respond with valid JSON only."
+            },
+            {
+                "role": "user",
+                "content": full_prompt
+            }
+        ],
+        "temperature": 0.1,  # Low temperature for consistent extraction
+        "max_tokens": 2000,
+    }
+    
+    # Set up headers with API key if provided
+    headers = {
+        "Content-Type": "application/json",
+    }
+    if config.LLM_API_KEY:
+        headers["Authorization"] = f"Bearer {config.LLM_API_KEY}"
+    
+    logger.info(f"Calling LLM extraction API at {config.LLM_API_ENDPOINT}")
+    
+    try:
+        # Make the HTTP request
+        with httpx.Client(timeout=config.LLM_TIMEOUT) as client:
+            response = client.post(
+                config.LLM_API_ENDPOINT,
+                json=payload,
+                headers=headers,
+            )
+            response.raise_for_status()
+        
+        # Parse the response
+        response_data = response.json()
+        
+        # Extract the content from the response
+        # The format may vary depending on the LLM provider
+        # This handles OpenAI-compatible format
+        if "choices" in response_data and len(response_data["choices"]) > 0:
+            content = response_data["choices"][0]["message"]["content"]
+        elif "content" in response_data:
+            content = response_data["content"]
+        else:
+            raise ValueError(f"Unexpected LLM response format: {response_data}")
+        
+        logger.debug(f"LLM response content: {content}")
+        
+        # Parse the JSON content
+        # The LLM might wrap the JSON in markdown code blocks, so clean it
+        content = content.strip()
+        if content.startswith("```json"):
+            content = content[7:]  # Remove ```json
+        if content.startswith("```"):
+            content = content[3:]  # Remove ```
+        if content.endswith("```"):
+            content = content[:-3]  # Remove ```
+        content = content.strip()
+        
+        # Parse the JSON
+        extracted_data = json.loads(content)
+        
+        # Validate against the MinimalQuestionBatch schema
+        minimal_batch = MinimalQuestionBatch.model_validate(extracted_data)
+        
+        logger.info(
+            f"Successfully extracted {len(minimal_batch.questions)} question(s) via LLM"
+        )
+        
+        return minimal_batch
+    
+    except httpx.HTTPError as e:
+        logger.error(f"HTTP error during LLM extraction: {e}", exc_info=True)
+        raise
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse LLM response as JSON: {e}", exc_info=True)
+        logger.error(f"LLM response content: {content}")
+        raise
+    except ValidationError as e:
+        logger.error(f"LLM response failed validation: {e}", exc_info=True)
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error during LLM extraction: {e}", exc_info=True)
+        raise
 
 
 def parse_extraction_filename(filename: str) -> tuple[str, str] | None:
@@ -131,6 +272,7 @@ def ingest_question(
     html_path: Path,
     source_name: str,
     question_key: str,
+    minimal_data: MinimalQuestionBatch | None = None,
 ) -> None:
     """Ingest a single question and its media into the database.
 
@@ -140,6 +282,9 @@ def ingest_question(
         html_path: Path to the HTML content file.
         source_name: Name of the source.
         question_key: Unique key of the question within the source.
+        minimal_data: Optional MinimalQuestionBatch for clean slate extraction mode.
+                     When provided, populates only question_context_html and
+                     question_stem_html fields using the new minimal schema.
     """
     # Read JSON metadata
     with open(json_path, encoding="utf-8") as f:
@@ -161,7 +306,7 @@ def ingest_question(
         )
         return
 
-    # Add question
+    # Add question with base data
     question_data = {
         "source_id": source_id,
         "source_question_key": question_key,
@@ -170,6 +315,38 @@ def ingest_question(
         "status": "extracted",
         "extraction_path": str(json_path.parent / json_path.stem),
     }
+
+    # Determine extraction mode and populate minimal schema fields
+    extracted_minimal_data = minimal_data
+    
+    # If LLM extraction is enabled and no minimal_data was provided, call the LLM
+    if config.ENABLE_LLM_EXTRACTION and extracted_minimal_data is None:
+        try:
+            logger.info(f"Attempting LLM extraction for {source_name}/{question_key}")
+            extracted_minimal_data = call_extraction_llm(html_content)
+            logger.info(f"LLM extraction successful for {source_name}/{question_key}")
+        except Exception as e:
+            logger.error(
+                f"LLM extraction failed for {source_name}/{question_key}: {e}",
+                exc_info=True
+            )
+            # Continue without LLM extraction - fields will remain NULL
+            logger.warning(f"Continuing ingestion without LLM extraction for {source_name}/{question_key}")
+    
+    # If we have minimal_data (either provided or extracted via LLM), populate the fields
+    if extracted_minimal_data is not None and extracted_minimal_data.questions:
+        # Use the first question from the batch (assuming one question per extraction file)
+        minimal_question = extracted_minimal_data.questions[0]
+        question_data["question_context_html"] = minimal_question.question_context_html
+        question_data["question_stem_html"] = minimal_question.question_stem_html
+        
+        if minimal_data is not None:
+            logger.info(f"Using provided clean slate extraction data for {source_name}/{question_key}")
+        else:
+            logger.info(f"Using LLM-extracted clean slate data for {source_name}/{question_key}")
+    # Note: When no minimal_data is available (not provided and LLM disabled/failed),
+    # the new fields (question_context_html, question_stem_html) remain NULL.
+    # This maintains backward compatibility with existing extraction data.
 
     question = repo.add_question(question_data)
     logger.info(f"Added question: {source_name}/{question_key} (ID: {question.question_id})")
