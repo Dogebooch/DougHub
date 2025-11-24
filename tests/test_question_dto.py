@@ -1,7 +1,7 @@
 import json
 
 from doughub.models import Media, Question
-from doughub.ui.dto import QuestionDTO
+from doughub.ui.dto import QuestionDTO, QuestionDetailDTO
 
 
 def test_question_dto_from_model_valid() -> None:
@@ -85,3 +85,67 @@ def test_question_dto_from_model_with_image() -> None:
         assert dto.image_path.replace("\\", "/").endswith("media/path/to/image.jpg")
     finally:
         config.MEDIA_ROOT = original_media_root
+
+
+def test_question_detail_dto_from_model_valid() -> None:
+    """Test QuestionDetailDTO.from_model with valid data."""
+    metadata = {
+        "answers": [
+            {"text": "Answer 1", "is_correct": True, "peer_percentage": 80.5},
+            {"text": "Answer 2", "is_correct": False, "peer_percentage": 19.5},
+        ],
+        "explanation": "<p>Detailed explanation</p>",
+        "educational_objective": "Understand X",
+        "key_points": ["Point 1", "Point 2"]
+    }
+    question = Question(
+        question_id=1,
+        raw_html="<p>Question stem</p>",
+        question_context_html="<p>Vignette context</p>",
+        question_stem_html="<p>Question stem</p>",
+        raw_metadata_json=json.dumps(metadata),
+        media=[]
+    )
+
+    dto = QuestionDetailDTO.from_model(question)
+
+    assert dto.vignette == "<p>Vignette context</p>"
+    assert dto.stem == "<p>Question stem</p>"
+    assert len(dto.answers) == 2
+    assert dto.answers[0].text == "Answer 1"
+    assert dto.answers[0].is_correct is True
+    assert dto.educational_objective == "Understand X"
+    assert dto.key_points == ["Point 1", "Point 2"]
+    assert dto.full_explanation == "<p>Detailed explanation</p>"
+
+
+def test_question_detail_dto_from_model_minimal() -> None:
+    """Test QuestionDetailDTO.from_model with minimal data."""
+    metadata: dict[str, list[str]] = {"answers": []}
+    question = Question(
+        question_id=1,
+        raw_html="<p>Question</p>",
+        raw_metadata_json=json.dumps(metadata),
+        media=[]
+    )
+
+    dto = QuestionDetailDTO.from_model(question)
+
+    assert dto.vignette == ""
+    assert dto.stem == "<p>Question</p>"
+    assert dto.answers == []
+    assert dto.educational_objective == ""
+    assert dto.key_points == []
+    assert dto.full_explanation == ""
+
+
+def test_question_detail_dto_empty() -> None:
+    """Test QuestionDetailDTO.empty returns a valid empty DTO."""
+    dto = QuestionDetailDTO.empty()
+
+    assert dto.vignette == ""
+    assert dto.stem == ""
+    assert dto.answers == []
+    assert dto.educational_objective == ""
+    assert dto.key_points == []
+    assert dto.full_explanation == ""

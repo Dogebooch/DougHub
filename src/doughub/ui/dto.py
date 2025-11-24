@@ -16,6 +16,78 @@ class AnswerDTO:
     text: str
     is_correct: bool
     peer_percentage: float | None = None
+    was_user_selected: bool = False
+
+
+@dataclass
+class QuestionDetailDTO:
+    """Enhanced DTO for displaying comprehensive question details in the extraction tab.
+
+    This DTO provides a structured layout optimized for educational content,
+    separating the clinical vignette, answer choices with statistics, and
+    detailed educational critique.
+    """
+    vignette: str = ""
+    stem: str = ""
+    answers: list[AnswerDTO] = field(default_factory=list)
+    educational_objective: str = ""
+    key_points: list[str] = field(default_factory=list)
+    full_explanation: str = ""
+
+    @classmethod
+    def from_model(cls, question_model: Question, *, extracted: dict | None = None) -> 'QuestionDetailDTO':
+        """Build a QuestionDetailDTO from a Question model.
+
+        Args:
+            question_model: The Question domain model.
+            extracted: Optional dict with extracted data (for future use).
+
+        Returns:
+            QuestionDetailDTO populated from the model.
+        """
+        try:
+            metadata = json.loads(question_model.raw_metadata_json)
+        except (json.JSONDecodeError, TypeError):
+            metadata = {}
+            logger.warning(f"Could not parse metadata JSON for Question ID: {question_model.question_id}")
+
+        # Parse answers from metadata
+        parsed_answers = []
+        for ans_data in metadata.get('answers', []):
+            if not isinstance(ans_data, dict):
+                continue
+            parsed_answers.append(AnswerDTO(
+                text=ans_data.get('text', '<i>No answer text provided.</i>'),
+                is_correct=ans_data.get('is_correct', False),
+                peer_percentage=ans_data.get('peer_percentage')
+            ))
+
+        # Extract vignette and stem from the question_context_html and question_stem_html if available
+        vignette = question_model.question_context_html or ""
+        stem = question_model.question_stem_html or question_model.raw_html or ""
+
+        # Extract explanation components from metadata
+        explanation = metadata.get('explanation', '')
+        educational_objective = metadata.get('educational_objective', '')
+        key_points = metadata.get('key_points', [])
+
+        return cls(
+            vignette=vignette,
+            stem=stem,
+            answers=parsed_answers,
+            educational_objective=educational_objective,
+            key_points=key_points,
+            full_explanation=explanation
+        )
+
+    @classmethod
+    def empty(cls) -> 'QuestionDetailDTO':
+        """Return an empty DTO representing the 'no selection' state.
+
+        Returns:
+            Empty QuestionDetailDTO with all fields set to defaults.
+        """
+        return cls()
 
 @dataclass
 class QuestionDTO:
@@ -70,7 +142,7 @@ class QuestionDTO:
 
 class MinimalQuestion(BaseModel):
     """Minimal schema for new extraction pipeline.
-    
+
     Represents a question with just context and stem HTML.
     Context is optional, stem is required.
     """

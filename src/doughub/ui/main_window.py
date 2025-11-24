@@ -20,7 +20,7 @@ from doughub.ui.card_editor_view import CardEditorView
 from doughub.ui.deck_browser_view import DeckBrowserView
 from doughub.ui.deck_list_panel import DeckListPanel
 from doughub.ui.diagnostics_view import DiagnosticsView
-from doughub.ui.dto import QuestionDTO
+from doughub.ui.dto import QuestionDetailDTO
 from doughub.ui.manage_group_dialog import ManageGroupDialog
 from doughub.ui.notebook_view import NotebookView
 from doughub.ui.question_browser_view import QuestionBrowserView
@@ -135,7 +135,6 @@ class MainWindow(QMainWindow):
         import logging
         logger = logging.getLogger(__name__)
         logger.info("Creating NotebookView widget...")
-        from doughub.ui.notebook_view import NotebookView
         self.notebook_view = NotebookView()
         logger.info("Adding NotebookView to splitter...")
         self.anki_splitter.addWidget(self.notebook_view)
@@ -196,27 +195,27 @@ class MainWindow(QMainWindow):
         # Create status bar with service indicators
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
-        
+
         # Add service status indicators
         status_widget = QWidget()
         status_layout = QHBoxLayout(status_widget)
         status_layout.setContentsMargins(5, 0, 5, 0)
         status_layout.setSpacing(15)
-        
+
         # Anki status
         self.anki_status_indicator = QLabel("●")
         self.anki_status_indicator.setStyleSheet("color: gray; font-size: 14px;")
         self.anki_status_indicator.setToolTip("AnkiConnect: Unknown")
         status_layout.addWidget(QLabel("Anki:"))
         status_layout.addWidget(self.anki_status_indicator)
-        
+
         # Notesium status
         self.notesium_status_indicator = QLabel("●")
         self.notesium_status_indicator.setStyleSheet("color: gray; font-size: 14px;")
         self.notesium_status_indicator.setToolTip("Notesium: Unknown")
         status_layout.addWidget(QLabel("Notesium:"))
         status_layout.addWidget(self.notesium_status_indicator)
-        
+
         self.status_bar.addPermanentWidget(status_widget)
         self.status_bar.showMessage("Ready")
 
@@ -278,14 +277,16 @@ class MainWindow(QMainWindow):
         try:
             question = self.question_repository.get_question_by_id(question_id)
             if question:
-                dto = QuestionDTO.from_model(question)
-                self.question_detail_view.set_question(dto)
+                detail_dto = QuestionDetailDTO.from_model(question)
+                self.question_detail_view.populate_view(detail_dto)
             else:
-                self.question_detail_view.set_question(None)
+                self.question_detail_view.populate_view(QuestionDetailDTO.empty())
         except Exception as e:
             self.show_status(f"Error loading question details: {e}")
             import logging
             logging.getLogger(__name__).error(f"Error loading question {question_id}: {e}", exc_info=True)
+            # On error, show empty view to avoid stale state
+            self.question_detail_view.populate_view(QuestionDetailDTO.empty())
 
     @pyqtSlot(str)
     def _on_deck_selected(self, deck_name: str) -> None:
