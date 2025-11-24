@@ -1,10 +1,12 @@
 """Tests for notebook database schema and migrations."""
 
 import tempfile
+from collections.abc import Generator
 from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, inspect
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
 from doughub.models import Base
@@ -12,7 +14,7 @@ from doughub.persistence import QuestionRepository
 
 
 @pytest.fixture
-def temp_db():
+def temp_db() -> Generator[tuple[Engine, Path], None, None]:
     """Create a temporary database for testing."""
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test.db"
@@ -98,7 +100,7 @@ class TestNotebookSchemaMigration:
             _question.note_path = test_path
             repo.commit()
 
-            question_id = int(_question.question_id)  # type: ignore[arg-type]
+            question_id = int(_question.question_id)
         finally:
             session.close()
 
@@ -138,7 +140,7 @@ class TestNotebookSchemaMigration:
             question.note_path = "/new/path.md"
             repo.commit()
 
-            question_id = int(question.question_id)  # type: ignore[arg-type]
+            question_id = int(question.question_id)
         finally:
             session.close()
 

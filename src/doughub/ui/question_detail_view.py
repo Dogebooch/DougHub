@@ -3,16 +3,21 @@
 import logging
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
-    QLabel,
-    QProgressBar,
-    QScrollArea,
     QTextBrowser,
     QVBoxLayout,
     QWidget,
+)
+from qfluentwidgets import (
+    BodyLabel,
+    FluentIcon,
+    HorizontalSeparator,
+    IconWidget,
+    ProgressBar,
+    SimpleCardWidget,
+    SmoothScrollArea,
 )
 
 from .dto import AnswerDTO, QuestionDTO
@@ -49,92 +54,67 @@ class QuestionDetailView(QWidget):
             self._render_question_part(child, f"Question Part {i+1}")
 
     def _render_question_part(self, dto: QuestionDTO, title: str) -> None:
-        # Add title
-        header = self._create_section_label(title)
-        header.setStyleSheet("font-weight: bold; font-size: 14px; margin-top: 10px; color: #2c3e50;")
-        self.content_layout.addWidget(header)
-
         # Question Text
         q_view = QTextBrowser()
         q_view.setHtml(dto.question_text_html)
         q_view.setOpenExternalLinks(True)
         # Simple auto-height adjustment could be complex, so we give it a reasonable min height
         q_view.setMinimumHeight(100)
+        q_view.setFrameShape(QFrame.Shape.NoFrame)
         self.content_layout.addWidget(q_view)
 
-        # Image
-        if dto.image_path:
-            try:
-                pixmap = QPixmap(dto.image_path)
-                if not pixmap.isNull():
-                    img_label = QLabel()
-                    img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                    img_label.setPixmap(
-                        pixmap.scaled(
-                            self.scroll_area.width() - 50,
-                            400,
-                            Qt.AspectRatioMode.KeepAspectRatio,
-                            Qt.TransformationMode.SmoothTransformation,
-                        )
-                    )
-                    self.content_layout.addWidget(img_label)
-                else:
-                    logger.warning(f"Failed to load image: {dto.image_path}")
-            except Exception as e:
-                logger.error(f"Error loading image {dto.image_path}: {e}")
-
         # Answers
-        self.content_layout.addWidget(self._create_section_label("Answers"))
         answers_widget = QWidget()
         answers_layout = QVBoxLayout(answers_widget)
-        answers_layout.setSpacing(10)
+        answers_layout.setSpacing(8)
+        answers_layout.setContentsMargins(0, 0, 0, 0)
         for answer in dto.answers:
             self._add_answer_widget(answer, answers_layout)
         self.content_layout.addWidget(answers_widget)
 
-        # Explanation
-        self.content_layout.addWidget(self._create_section_label("Explanation"))
-        exp_view = QTextBrowser()
-        exp_view.setHtml(dto.explanation_html)
-        exp_view.setOpenExternalLinks(True)
-        exp_view.setMinimumHeight(100)
-        self.content_layout.addWidget(exp_view)
-
     def _add_separator(self) -> None:
-        line = QFrame()
-        line.setFrameShape(QFrame.Shape.HLine)
-        line.setFrameShadow(QFrame.Shadow.Sunken)
-        line.setStyleSheet("background-color: #bdc3c7; margin: 20px 0;")
-        self.content_layout.addWidget(line)
+        sep = HorizontalSeparator()
+        self.content_layout.addWidget(sep)
 
     def _add_answer_widget(self, answer_dto: AnswerDTO, layout: QVBoxLayout) -> None:
-        answer_frame = QFrame()
-        answer_frame.setObjectName("answerFrame")
-        if answer_dto.is_correct:
-            answer_frame.setProperty("correct", True)
+        answer_card = SimpleCardWidget()
+        card_layout = QVBoxLayout(answer_card)
+        card_layout.setContentsMargins(12, 12, 12, 12)
+        card_layout.setSpacing(8)
 
-        frame_layout = QVBoxLayout(answer_frame)
-        answer_label = QLabel(answer_dto.text)
+        # Header with text and optional checkmark
+        header_layout = QHBoxLayout()
+
+        answer_label = BodyLabel(answer_dto.text)
         answer_label.setWordWrap(True)
         answer_label.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
-        frame_layout.addWidget(answer_label)
+        header_layout.addWidget(answer_label, 1)
+
+        if answer_dto.is_correct:
+            icon = IconWidget(FluentIcon.ACCEPT)
+            icon.setFixedSize(16, 16)
+            # Set icon color to green (success)
+            icon.setStyleSheet("color: #107C10;")
+            header_layout.addWidget(icon, 0)
+
+        card_layout.addLayout(header_layout)
 
         if answer_dto.peer_percentage is not None:
             peer_layout = QHBoxLayout()
-            progress_bar = QProgressBar()
+            progress_bar = ProgressBar()
             progress_bar.setValue(int(answer_dto.peer_percentage))
             progress_bar.setTextVisible(False)
-            progress_bar.setFixedHeight(12)
-            peer_layout.addWidget(progress_bar, 1)  # Stretch factor
+            progress_bar.setFixedHeight(4)
+            peer_layout.addWidget(progress_bar, 1)
 
-            percent_label = QLabel(f"{answer_dto.peer_percentage:.1f}%")
+            percent_label = BodyLabel(f"{answer_dto.peer_percentage:.1f}%")
             peer_layout.addWidget(percent_label, 0)
 
-            frame_layout.addLayout(peer_layout)
+            card_layout.addLayout(peer_layout)
 
-        layout.addWidget(answer_frame)
+        layout.addWidget(answer_card)
 
     def show_placeholder(self) -> None:
         """Show a helpful message when no question is selected."""
@@ -144,8 +124,10 @@ class QuestionDetailView(QWidget):
     def _clear_layout(self, layout: QVBoxLayout) -> None:
         while layout.count():
             child = layout.takeAt(0)
-            if child.widget():
-                child.widget().deleteLater()
+            if child:
+                widget = child.widget()
+                if widget:
+                    widget.deleteLater()
 
     def _init_ui(self) -> None:
         # Main layout holds placeholder and scroll area
@@ -156,25 +138,23 @@ class QuestionDetailView(QWidget):
         self.placeholder_widget = QWidget(self)
         placeholder_layout = QVBoxLayout(self.placeholder_widget)
         placeholder_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        ph_label = QLabel("Select a question from the list to view its details.")
+        ph_label = BodyLabel("Select a question from the list to view its details.")
         ph_label.setObjectName("placeholderLabel")
         placeholder_layout.addWidget(ph_label)
         root_layout.addWidget(self.placeholder_widget)
 
         # Scroll Area for Content
-        self.scroll_area = QScrollArea(self)
+        self.scroll_area = SmoothScrollArea(self)
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setObjectName("detailsScrollArea")
+        self.scroll_area.setFrameShape(QFrame.Shape.NoFrame)
 
         self.content_widget = QWidget()
         self.content_layout = QVBoxLayout(self.content_widget)
-        self.content_layout.setSpacing(20)
-        self.content_layout.setContentsMargins(20, 20, 20, 20)
+        self.content_layout.setSpacing(8)
+        self.content_layout.setContentsMargins(16, 16, 16, 16)
 
         self.scroll_area.setWidget(self.content_widget)
         root_layout.addWidget(self.scroll_area)
 
-    def _create_section_label(self, text: str) -> QLabel:
-        label = QLabel(text)
-        label.setObjectName("sectionHeader")
-        return label
+

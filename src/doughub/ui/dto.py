@@ -29,8 +29,7 @@ class QuestionDTO:
     def from_model(cls, question_model: Question) -> 'QuestionDTO':
         """Parses a Question model instance into a UI-friendly DTO."""
         try:
-            # type ignore: SQLAlchemy column access
-            metadata = json.loads(question_model.raw_metadata_json)  # type: ignore
+            metadata = json.loads(question_model.raw_metadata_json)
         except (json.JSONDecodeError, TypeError):
             metadata = {}
             logger.warning(f"Could not parse metadata JSON for Question ID: {question_model.question_id}")
@@ -50,11 +49,11 @@ class QuestionDTO:
         if question_model.media:
             image_media = next((m for m in question_model.media if m.media_role == 'image'), None)
             if image_media:
-                image_path = os.path.join(config.MEDIA_ROOT, image_media.relative_path)  # type: ignore
+                image_path = os.path.join(config.MEDIA_ROOT, image_media.relative_path)
 
         dto = cls(
-            question_id=question_model.question_id,  # type: ignore
-            question_text_html=question_model.raw_html or "<i>No question content.</i>",  # type: ignore
+            question_id=question_model.question_id,
+            question_text_html=question_model.raw_html or "<i>No question content.</i>",
             answers=parsed_answers,
             explanation_html=metadata.get('explanation', '<i>No explanation provided.</i>'),
             image_path=image_path

@@ -7,10 +7,16 @@ Run these tests with: pytest -m integration
 Skip these tests with: pytest -m "not integration"
 """
 
+from collections.abc import Generator
+from unittest.mock import Mock, patch
+
+import httpx
 import pytest
 
 from doughub.anki_client import AnkiConnectClient
 from doughub.exceptions import (
+    AnkiConnectAPIError,
+    AnkiConnectConnectionError,
     DeckNotFoundError,
     InvalidNoteError,
     ModelNotFoundError,
@@ -20,7 +26,7 @@ from doughub.utils.anki_process import AnkiProcessManager
 
 
 @pytest.fixture(scope="module")
-def anki_manager():
+def anki_manager() -> Generator[AnkiProcessManager, None, None]:
     """Fixture to manage Anki process for integration tests."""
     manager = AnkiProcessManager()
     if not manager.is_ankiconnect_running():
@@ -34,7 +40,7 @@ def anki_manager():
 
 
 @pytest.fixture
-def client(anki_manager):
+def client(anki_manager: AnkiProcessManager) -> AnkiConnectClient:
     """Fixture to create an AnkiConnect client for integration tests."""
     client = AnkiConnectClient()
     if not client.check_connection():
@@ -43,13 +49,13 @@ def client(anki_manager):
 
 
 @pytest.mark.integration
-def test_connection_check(client):
+def test_connection_check(client: AnkiConnectClient) -> None:
     """Test that we can connect to AnkiConnect."""
     assert client.check_connection() is True
 
 
 @pytest.mark.integration
-def test_get_version(client):
+def test_get_version(client: AnkiConnectClient) -> None:
     """Test getting AnkiConnect version."""
     version = client.get_version()
     assert isinstance(version, int)
@@ -57,7 +63,7 @@ def test_get_version(client):
 
 
 @pytest.mark.integration
-def test_get_deck_names(client):
+def test_get_deck_names(client: AnkiConnectClient) -> None:
     """Test retrieving deck names."""
     deck_names = client.get_deck_names()
     assert isinstance(deck_names, list)
@@ -65,7 +71,7 @@ def test_get_deck_names(client):
 
 
 @pytest.mark.integration
-def test_get_deck_names_and_ids(client):
+def test_get_deck_names_and_ids(client: AnkiConnectClient) -> None:
     """Test retrieving deck names with IDs."""
     decks_dict = client.get_deck_names_and_ids()
     assert isinstance(decks_dict, dict)
@@ -74,7 +80,7 @@ def test_get_deck_names_and_ids(client):
 
 
 @pytest.mark.integration
-def test_get_decks(client):
+def test_get_decks(client: AnkiConnectClient) -> None:
     """Test retrieving decks as objects."""
     decks = client.get_decks()
     assert isinstance(decks, list)
@@ -83,7 +89,7 @@ def test_get_decks(client):
 
 
 @pytest.mark.integration
-def test_get_model_names(client):
+def test_get_model_names(client: AnkiConnectClient) -> None:
     """Test retrieving note type names."""
     model_names = client.get_model_names()
     assert isinstance(model_names, list)
@@ -93,7 +99,7 @@ def test_get_model_names(client):
 
 
 @pytest.mark.integration
-def test_get_model_names_and_ids(client):
+def test_get_model_names_and_ids(client: AnkiConnectClient) -> None:
     """Test retrieving note type names with IDs."""
     models_dict = client.get_model_names_and_ids()
     assert isinstance(models_dict, dict)
@@ -102,7 +108,7 @@ def test_get_model_names_and_ids(client):
 
 
 @pytest.mark.integration
-def test_get_note_types(client):
+def test_get_note_types(client: AnkiConnectClient) -> None:
     """Test retrieving note types as objects."""
     note_types = client.get_note_types()
     assert isinstance(note_types, list)
@@ -111,7 +117,7 @@ def test_get_note_types(client):
 
 
 @pytest.mark.integration
-def test_get_model_field_names(client):
+def test_get_model_field_names(client: AnkiConnectClient) -> None:
     """Test retrieving field names for a note type."""
     fields = client.get_model_field_names("Basic")
     assert isinstance(fields, list)
@@ -120,14 +126,14 @@ def test_get_model_field_names(client):
 
 
 @pytest.mark.integration
-def test_get_model_field_names_not_found(client):
+def test_get_model_field_names_not_found(client: AnkiConnectClient) -> None:
     """Test error when requesting fields for non-existent note type."""
     with pytest.raises(ModelNotFoundError):
         client.get_model_field_names("NonExistentModel12345")
 
 
 @pytest.mark.integration
-def test_find_notes(client):
+def test_find_notes(client: AnkiConnectClient) -> None:
     """Test finding notes with a query."""
     # Search for any notes (empty query returns all notes)
     note_ids = client.find_notes("")
@@ -136,13 +142,16 @@ def test_find_notes(client):
 
 
 @pytest.mark.integration
-def test_add_and_update_note_lifecycle(client):
+def test_add_and_update_note_lifecycle(client: AnkiConnectClient) -> None:
     """Test full lifecycle: add a note, update it, retrieve it, verify changes."""
+    import time
+    timestamp = int(time.time())
+    
     # Add a test note
     note_id = client.add_note(
         deck_name="Default",
         model_name="Basic",
-        fields={"Front": "Integration Test Front", "Back": "Integration Test Back"},
+        fields={"Front": f"Integration Test Front {timestamp}", "Back": f"Integration Test Back {timestamp}"},
         tags=["integration-test", "doughub"],
     )
     assert isinstance(note_id, int)
@@ -155,23 +164,23 @@ def test_add_and_update_note_lifecycle(client):
         note = notes[0]
         assert note.note_id == note_id
         assert note.model_name == "Basic"
-        assert note.fields["Front"] == "Integration Test Front"
-        assert note.fields["Back"] == "Integration Test Back"
+        assert note.fields["Front"] == f"Integration Test Front {timestamp}"
+        assert note.fields["Back"] == f"Integration Test Back {timestamp}"
         assert "integration-test" in note.tags
         assert "doughub" in note.tags
 
         # Update the note
         client.update_note_fields(
             note_id=note_id,
-            fields={"Front": "Updated Front", "Back": "Updated Back"},
+            fields={"Front": f"Updated Front {timestamp}", "Back": f"Updated Back {timestamp}"},
         )
 
         # Verify the update
         updated_notes = client.get_notes_info([note_id])
         assert len(updated_notes) == 1
         updated_note = updated_notes[0]
-        assert updated_note.fields["Front"] == "Updated Front"
-        assert updated_note.fields["Back"] == "Updated Back"
+        assert updated_note.fields["Front"] == f"Updated Front {timestamp}"
+        assert updated_note.fields["Back"] == f"Updated Back {timestamp}"
 
     finally:
         # Clean up: delete the test note
@@ -182,7 +191,7 @@ def test_add_and_update_note_lifecycle(client):
 
 
 @pytest.mark.integration
-def test_add_note_deck_not_found(client):
+def test_add_note_deck_not_found(client: AnkiConnectClient) -> None:
     """Test error when adding note to non-existent deck."""
     with pytest.raises(DeckNotFoundError):
         client.add_note(
@@ -193,7 +202,7 @@ def test_add_note_deck_not_found(client):
 
 
 @pytest.mark.integration
-def test_add_note_model_not_found(client):
+def test_add_note_model_not_found(client: AnkiConnectClient) -> None:
     """Test error when adding note with non-existent note type."""
     with pytest.raises(ModelNotFoundError):
         client.add_note(
@@ -204,7 +213,7 @@ def test_add_note_model_not_found(client):
 
 
 @pytest.mark.integration
-def test_add_note_invalid_fields(client):
+def test_add_note_invalid_fields(client: AnkiConnectClient) -> None:
     """Test error when adding note with invalid field names."""
     with pytest.raises(InvalidNoteError):
         client.add_note(
@@ -215,7 +224,7 @@ def test_add_note_invalid_fields(client):
 
 
 @pytest.mark.integration
-def test_update_note_not_found(client):
+def test_update_note_not_found(client: AnkiConnectClient) -> None:
     """Test error when updating non-existent note."""
     with pytest.raises(NoteNotFoundError):
         client.update_note_fields(
@@ -224,38 +233,56 @@ def test_update_note_not_found(client):
 
 
 @pytest.mark.integration
-def test_update_note_invalid_fields(client):
-    """Test error when updating note with invalid field names."""
+def test_update_note_invalid_fields(client: AnkiConnectClient) -> None:
+    """Test that updating note with invalid field names is ignored or handled gracefully."""
+    import time
+    timestamp = int(time.time())
+    
     # First create a note to get a valid ID
     note_id = client.add_note(
         deck_name="Default",
         model_name="Basic",
-        fields={"Front": "Test", "Back": "Test"},
+        fields={"Front": f"Invalid Update Test {timestamp}", "Back": f"Invalid Update Test Back {timestamp}"},
         tags=["integration-test"],
     )
 
     try:
-        with pytest.raises(InvalidNoteError):
-            client.update_note_fields(note_id=note_id, fields={"InvalidField": "Value"})
+        # Try to update with non-existent field - AnkiConnect ignores this silently
+        client.update_note_fields(
+            note_id=note_id,
+            fields={"NonExistentField": "New Value", "Front": f"Valid Update {timestamp}"},
+        )
+        
+        # Verify that the valid field WAS updated
+        notes = client.get_notes_info([note_id])
+        assert len(notes) == 1
+        assert notes[0].fields["Front"] == f"Valid Update {timestamp}"
+        
+        # Verify that the invalid field is NOT present (implied by model definition, but good to check logic holds)
+        assert "NonExistentField" not in notes[0].fields
+        
     finally:
         # The note will remain in Anki; cleanup would require additional actions
         pass
 
 
 @pytest.mark.integration
-def test_get_notes_info_multiple(client):
+def test_get_notes_info_multiple(client: AnkiConnectClient) -> None:
     """Test retrieving information for multiple notes at once."""
+    import time
+    timestamp = int(time.time())
+    
     # Create two test notes
     note_id1 = client.add_note(
         deck_name="Default",
         model_name="Basic",
-        fields={"Front": "Multi Test 1", "Back": "Back 1"},
+        fields={"Front": f"Multi Test 1 {timestamp}", "Back": f"Back 1 {timestamp}"},
         tags=["integration-test"],
     )
     note_id2 = client.add_note(
         deck_name="Default",
         model_name="Basic",
-        fields={"Front": "Multi Test 2", "Back": "Back 2"},
+        fields={"Front": f"Multi Test 2 {timestamp}", "Back": f"Back 2 {timestamp}"},
         tags=["integration-test"],
     )
 
@@ -272,9 +299,76 @@ def test_get_notes_info_multiple(client):
 
 
 @pytest.mark.integration
-def test_context_manager(anki_manager):
+def test_context_manager(anki_manager: AnkiProcessManager) -> None:
     """Test using client as a context manager."""
     with AnkiConnectClient() as client:
         version = client.get_version()
         assert isinstance(version, int)
     # Client should be closed after exiting context
+
+
+class TestAnkiFailures:
+    """Tests for AnkiConnect failure scenarios using mocks."""
+
+    @patch("doughub.anki_client.transport.httpx.Client")
+    def test_connection_refused(self, mock_client_cls):
+        """Test handling of connection refused error."""
+        mock_client = mock_client_cls.return_value
+        mock_client.post.side_effect = httpx.ConnectError("Connection refused")
+
+        client = AnkiConnectClient()
+
+        with pytest.raises(AnkiConnectConnectionError, match="Unable to connect"):
+            client.get_version()
+
+    @patch("doughub.anki_client.transport.httpx.Client")
+    def test_http_error(self, mock_client_cls):
+        """Test handling of HTTP errors."""
+        mock_client = mock_client_cls.return_value
+        mock_client.post.side_effect = httpx.HTTPStatusError(
+            "500 Internal Server Error", request=Mock(), response=Mock()
+        )
+
+        client = AnkiConnectClient()
+
+        with pytest.raises(AnkiConnectConnectionError, match="HTTP error"):
+            client.get_version()
+
+    @patch("doughub.anki_client.transport.httpx.Client")
+    def test_malformed_json_response(self, mock_client_cls):
+        """Test handling of invalid JSON response."""
+        mock_client = mock_client_cls.return_value
+        mock_response = Mock()
+        mock_response.json.side_effect = ValueError("Invalid JSON")
+        mock_client.post.return_value = mock_response
+
+        client = AnkiConnectClient()
+
+        with pytest.raises(AnkiConnectAPIError, match="Invalid JSON"):
+            client.get_version()
+
+    @patch("doughub.anki_client.transport.httpx.Client")
+    def test_missing_error_field(self, mock_client_cls):
+        """Test handling of response missing 'error' field."""
+        mock_client = mock_client_cls.return_value
+        mock_response = Mock()
+        mock_response.json.return_value = {"result": 6}  # Missing 'error'
+        mock_client.post.return_value = mock_response
+
+        client = AnkiConnectClient()
+
+        with pytest.raises(AnkiConnectAPIError, match="missing 'error' field"):
+            client.get_version()
+
+    @patch("doughub.anki_client.transport.httpx.Client")
+    def test_api_error_response(self, mock_client_cls):
+        """Test handling of API error response."""
+        mock_client = mock_client_cls.return_value
+        mock_response = Mock()
+        mock_response.json.return_value = {"result": None, "error": "Some API Error"}
+        mock_client.post.return_value = mock_response
+
+        client = AnkiConnectClient()
+
+        with pytest.raises(AnkiConnectAPIError, match="Some API Error"):
+            client.get_version()

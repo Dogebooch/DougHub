@@ -1,0 +1,644 @@
+Core Principles
+
+Design for vision first. Users form an impression in ~0.1s and decide to stay/leave within a few seconds.
+
+UI must communicate structure, priority, and affordances instantly using shape, space, contrast, and color.
+
+Treat white space, color, and contrast as functional tools, not decoration.
+
+Use Gestalt principles to control how users group and interpret elements.
+
+Aim to reduce cognitive load: remove clutter; chunk information; make relationships obvious.
+
+Evaluate visual hierarchy with a 5-second blur test.
+
+Layout
+Gestalt-Based Layout Rules
+Emergence
+
+Users recognize overall shape/outline before details.
+
+Rule:
+
+Make the overall layout shape obvious (e.g., clear columns, cards, hero block) before adding fine details or decoration.
+
+Ensure primary interactive elements look like their class (e.g., buttons look like buttons) before styling.
+
+Reification & Closure
+
+People fill in missing details when enough information is provided.
+
+Rules:
+
+You can omit non-essential visual boundaries if alignment and spacing strongly imply structure (e.g., card grids without visible borders).
+
+Use partial shapes and clean grids to achieve minimalist layouts; rely on users completing the pattern.
+
+Example (grid layout)
+
+3 images in a column-aligned grid, no visible borders. Equal widths and consistent spacing cause users to “see” the grid and parse content in three columns.
+
+Multistability
+
+Ambiguous visuals flip between interpretations.
+
+Rules:
+
+Avoid layouts that can read as two different patterns (e.g., overlapping shapes that could be figure or background).
+
+Run quick usability checks: ask new viewers “what is this?” and ensure the answer matches your intent.
+
+Invariance
+
+Users recognize objects across rotation/scale/deformation.
+
+Rule:
+
+Keep core shapes and patterns consistent across responsive breakpoints (icons, button shapes, card layouts) so users recognize them even when size or orientation changes.
+
+Grouping & Proximity
+White Space as Structure
+
+White space types:
+
+Visual: around graphics/icons/images.
+
+Layout: margins, paddings, gutters.
+
+Text: line spacing and letter spacing.
+
+Content: gaps between blocks/columns.
+
+Rules:
+
+Use consistent vertical rhythm between related elements; increase spacing between unrelated groups.
+
+Use layout white space to form clear sections: header, main content, secondary navigation, footer.
+
+Group items by proximity: items closer together are interpreted as related.
+
+Form example (labels & fields):
+
+Place labels immediately adjacent to their input fields (above or left, with minimal gap).
+
+Avoid labels far from fields; even small gaps can decrease confidence and completion.
+
+Enclosure
+
+Encircle related content to unify it visually.
+
+Rules:
+
+Wrap related content (e.g., post title + media + actions) inside a card/container with shared background or border.
+
+Use enclosure plus a slightly different background color to create visual modules (e.g., feed items, settings sections).
+
+Example (post card):
+
+One card contains: avatar, title, text, media, and actions (like/comment/share). The enclosing card and shared background mark all of these as one object.
+
+Chunking & Cognitive Load
+
+Short-term memory is limited (~3–7 meaningful items at once).
+
+Chunking = grouping related items into meaningful sets.
+
+When to chunk:
+
+Users must remember information later (e-learning, onboarding flows, complex settings).
+
+Mobile or noisy environments where attention is fragmented.
+
+Long forms or lengthy option lists.
+
+Rules:
+
+Group content and fields into thematic sections (e.g., “Personal Info”, “Shipping”, “Payment”).
+
+Within each chunk, limit items to a manageable set (aim for ~3–7 items per chunk when memorization matters).
+
+Use headings and spacing to separate chunks.
+
+For browsing lists (e.g., products), chunk at category level, not at individual item level, to avoid users seeing only tiny groups of items per page.
+
+Example (product categories vs. items):
+
+Category page: 6–8 prominent category tiles in a grid (chunking improves scanability).
+
+Product list within a category: continuous grid or list of many items (no artificial chunking into 6-item pages that slow browsing).
+
+Attracting Attention With Space
+
+Absence of elements makes remaining elements stand out.
+
+Rules:
+
+Add extra white space around primary CTAs and hero content sections.
+
+Reduce surrounding clutter: avoid dense sidebars or competing banners near the main task.
+
+In crowded designs, tighten space around low-priority items to visually compress them and emphasize key areas via contrast in space.
+
+Example (search vs. portal):
+
+Minimal search page: single input field, logo, and a few unobtrusive links → effortless focus on search.
+
+Portal page with many competing modules (news, sports, ads, stocks) → user attention is fragmented; avoid this when a single primary task exists.
+
+Visual Hierarchy & the 5-Second Blur Test
+Blur Test Procedure
+
+Take a screenshot of the page.
+
+Apply a Gaussian blur of ~5–10px (Photoshop) or
+
+In Chrome dev tools, set on body:
+-webkit-filter: blur(5px);
+
+Look at the blurred page for ~5 seconds.
+
+Note what jumps out first: text blocks, shapes, buttons.
+
+Compare that to intended priorities (e.g., primary CTA, headline, key value proposition).
+
+Iteration:
+
+If the wrong element dominates, adjust:
+
+Size (increase/decrease).
+
+Color (use more or less contrast).
+
+Brightness (foreground/background contrast).
+
+Spacing (more isolation for important items).
+
+Position (move key items to prominent zones like top-center).
+
+Repeat blur test until what stands out matches the intended hierarchy.
+
+Typography
+
+The book only gives limited typography guidance; focus is on spacing & link styling.
+
+Rules:
+
+Use generous line-height to improve readability, especially for long-form content.
+
+Maintain consistent paragraph spacing; use larger gaps between sections than between paragraphs.
+
+Avoid over-dense text blocks; break long content into short paragraphs and subheadings.
+
+For logos/brand marks within content:
+
+Surround with extra space instead of enlarging to grab attention.
+
+Link-specific typographic rules:
+
+All links must visually differ from body text (color and/or underline).
+
+All links of the same type must look the same:
+
+Navigation links share one style.
+
+Content links share another but are consistent among themselves.
+
+For multiple link categories:
+
+Use color as the primary differentiator (most powerful similarity/contrast signal).
+
+Use size/weight for secondary differentiation.
+
+Example (links):
+
+Content links: blue, medium weight, underlined on hover.
+
+Username/category links: same blue, smaller size → clearly related but secondary.
+
+Action links (e.g., “Comment”, “Share”): grey but bold → distinct category of “actions”, still recognized as clickable.
+
+Color
+Color Theory
+Contrast
+
+Each color has a direct opposite on the color wheel (complement); pairing them produces strong contrast (e.g., blue vs. orange).
+
+Strong color contrast is one of the fastest ways to:
+
+Separate foreground vs. background.
+
+Highlight primary actions.
+
+Complementation
+
+Colors adjacent on the wheel support one another (e.g., purple with blue or pink).
+
+Useful for:
+
+Harmonious backgrounds.
+
+Smooth gradients.
+
+Subtle section differentiation.
+
+Vibrancy
+
+Warm colors (red, orange, yellow): energetic, attention-grabbing, aggressive if overused.
+
+Cool colors (green, blue, purple): calm, stable, safe; darker shades can feel serious or luxurious.
+
+Rule of thumb:
+
+Use warm colors for focal elements (alerts, CTAs) against cool backgrounds for maximum attention.
+
+Use cool or neutral colors for large areas and background; reserve intense warm colors for limited, high-priority elements.
+
+Emotional Associations (Western-centric)
+
+Use these emotions as directional signals, not hard rules.
+
+Red
+
+Promotes: power, urgency, danger, youth.
+
+Use for: warnings, alerts, emergency messages; high-urgency CTAs.
+
+Caution: can feel aggressive/angering; avoid saturating entire UI.
+
+Orange
+
+Promotes: friendliness, creativity, energy.
+
+Use for: playful CTAs, friendly brands, secondary emphasis.
+
+Works well as both primary and accent color.
+
+Yellow
+
+Bright: happiness, enthusiasm, optimism.
+
+Dark/gold: antiquity, wisdom, authority.
+
+Use for: highlights and accents; avoid large pure-yellow backgrounds which can be tiring.
+
+Green
+
+Promotes: growth, stability, nature, finances.
+
+Use for: success states, financial products, eco themes.
+
+Dark green: wealth, stability; bright green: freshness, vitality.
+
+Blue
+
+Light: openness, friendliness, safety.
+
+Dark: reliability, professionalism, seriousness.
+
+Use for: corporate sites, utilities, tools, social platforms, trust-building.
+
+Purple
+
+Light (lavender): romance, gentleness.
+
+Dark: luxury, mystery, decadence.
+
+Use for: fashion, premium experiences, creative products.
+
+Black
+
+Promotes: power, sophistication, edginess.
+
+Use for: high-end brands, hero sections, strong typography.
+
+Combine with white and simple layouts for a classic, elegant feel.
+
+White
+
+Promotes: cleanliness, simplicity, virtue.
+
+Use for: backgrounds, minimalist layouts, negative space.
+
+Ideal for showcasing colorful artwork or product photography.
+
+Gray
+
+Promotes: neutrality, professionalism, restraint.
+
+Use for: backgrounds, secondary UI chrome, subtle dividers.
+
+Tune the shade for more “white-like” (light) or “black-like” (dark) character.
+
+Beige
+
+Promotes: earthy, humble, or paper-like warmth.
+
+Adapts to surrounding colors; used mainly as a background.
+
+Darker beige: organic, classic; lighter: fresh yet soft.
+
+Ivory/Cream
+
+Promotes: comfort, soft minimalism, warmth.
+
+Use to soften harsh contrast between pure white and dark elements.
+
+Color Schemes
+Triadic
+
+3 colors equally spaced (120° apart) on the color wheel.
+
+Use when: you want balanced, safe color harmony.
+
+Implementation:
+
+1 color for background.
+
+1 for primary elements (CTA, main highlights).
+
+1 for secondary elements (sub-headings, secondary CTAs).
+
+Compound / Split Complementary
+
+4-color scheme: two pairs of complementary colors.
+
+Use when: you want strong visual impact with multiple focal areas (e.g., rich illustrations or landing pages).
+
+Implementation:
+
+Use one pair for background vs. main content.
+
+Use the other pair for secondary content and accents.
+
+Analogous
+
+3+ colors adjacent on the wheel (e.g., blue–teal–green).
+
+Use when: you want a cohesive, calm feel.
+
+Implementation:
+
+Use analogous range for most of the UI.
+
+Introduce one contrasting color sparingly for CTAs.
+
+Components
+Buttons
+
+Light/Dark Contrast & Depth
+
+Simulate depth by:
+
+Darker color for “pressed” state.
+
+Slight shadow or darker bottom edge even in otherwise flat design.
+
+Rules:
+
+Primary buttons must have highest color contrast against their background.
+
+Hover and active states must be clearly visible (e.g., reversed foreground/background colors, increased brightness/darkness).
+
+Example:
+
+Default: blue background, white text.
+
+Hover: slightly lighter or darker blue, maybe outline or shadow change.
+
+Active: darkest shade or inverted colors.
+
+Navigation Elements
+
+Place navigation items on a shared line to signal they are equal in hierarchy (Gestalt continuation).
+
+Vertical icon-only nav:
+
+Use consistent color, size, and spacing to signal all icons are the same “level”.
+
+Show labels on hover/expand to reveal meaning while saving vertical space.
+
+Popup/Modal Nav
+
+Dim entire page behind modal (figure-ground relationship).
+
+Keep modal fixed while underlying content scrolls to maintain it as the primary figure.
+
+Cards & Content Blocks
+
+Use consistent card styling (shape, background color, hover behavior) for items representing the same type (posts, patterns, products).
+
+Cards should:
+
+Be clickable as a whole or clearly indicate the primary clickable area.
+
+Maintain same structure: thumbnail → title → meta (price, date, location).
+
+Example (pattern library cards):
+
+Grid of equal cards, each with a thumbnail and title.
+
+On hover: same interaction on each card (e.g., overlay with more info) to reinforce similarity.
+
+Interaction Patterns
+Similarity & Consistency
+
+Links & Actions
+
+Content links (to pages) share one style; action links (comment, share, like) share another.
+
+Username or category links can share color but differ in size/weight to show separate hierarchy.
+
+Product Tiles / Cards
+
+Use same shape, size, and structure for all products of a type; similarities communicate that each tile behaves the same way.
+
+Figure-Ground for Overlays & Focus
+
+To highlight an overlay (newsletter, modal, cart confirmation):
+
+Darken or blur the background page.
+
+Make overlay brighter and sharper.
+
+Keep overlay fixed while background scrolls if needed.
+
+Example (newsletter overlay):
+
+Page dims to 60–70% brightness.
+
+Center modal with clear close control; overlay content remains crisp.
+
+Closure in Interaction
+
+Example (add to cart):
+
+On “Add to cart” click:
+
+Change button text to “Added!” or similar.
+
+Update cart item count in header.
+
+Show small, temporary modal or tooltip confirming addition.
+
+This skips extra navigation to cart page; users infer action completion from feedback.
+
+Continuation in Flows & Menus
+
+Use horizontal lines or item alignment to suggest step-by-step flow.
+
+In menus:
+
+First row: content types (e.g., Articles, Videos).
+
+Second row: filters/categories (e.g., Design, Business).
+
+Users infer distinct levels based on row alignment.
+
+Navigation
+
+Combine similarity, continuation, and contrast to make nav structure obvious.
+
+Rules:
+
+Top-level navigation:
+
+Items aligned in a single row.
+
+Same font, size, and hover behavior.
+
+Subnavigation:
+
+Aligned in a separate row or column.
+
+Slightly smaller or less contrast than top-level.
+
+Mark current location via:
+
+Color and/or underline.
+
+Background pill or tab styling.
+
+Vertical Nav Icons
+
+When using icon-only vertical nav:
+
+Icons share size, color, and alignment.
+
+Provide text labels on hover or when selected.
+
+Keep spacing equal to exploit similarity and grouping.
+
+States & Feedback
+
+Hover
+
+Use subtle color or contrast changes (e.g., reverse colors or adjust brightness) on:
+
+Buttons.
+
+Cards.
+
+Navigation items.
+
+Keep hover behavior consistent for the same type of element.
+
+Active/Pressed
+
+Stronger feedback than hover:
+
+Darkest or lightest state of button color.
+
+Slight position shift (1–2px) to mimic pressing.
+
+Progress & Confirmation
+
+Use microfeedback (text changes, icon ticks, count updates, mini modals) to confirm actions without forcing hard page transitions.
+
+Forms & Validation
+
+Focus is mainly on layout and chunking rather than explicit validation states.
+
+Rules:
+
+Place labels closest to their fields, avoiding ambiguity:
+
+Above or to the left of inputs.
+
+Never float labels far away or between columns.
+
+Group related fields under section headings with added vertical space.
+
+For long forms:
+
+Break into logical sections (e.g., personal, shipping, billing).
+
+Use progress indicator if multi-step.
+
+Avoid overwhelming users with a single massive block of fields; chunk into smaller visible groups.
+
+Error Handling
+
+The book touches error signaling indirectly via color and emphasis.
+
+Guidelines derived from content:
+
+Use red sparingly to indicate serious issues or required attention.
+
+Ensure error messages:
+
+Are placed close to the problematic field (proximity).
+
+Are visually differentiated via color and contrast.
+
+Don’t rely on color alone; include icons or text pattern changes where possible.
+
+Accessibility
+
+While not an accessibility manual, the content implies several accessibility-friendly rules:
+
+Maintain clear foreground/background contrast so users can distinguish elements and text.
+
+Use spacing and grouping instead of only color or borders to convey relationships.
+
+Avoid ambiguous, multistable visuals that require interpretation; strive for single, clear meaning.
+
+Do not rely exclusively on color (e.g., red vs. green) to distinguish states when possible; combine with icons or text labels.
+
+Content & Microcopy
+
+Visual organization can sometimes replace explicit labels (e.g., product tiles obviously represent products without a “Products” heading), but:
+
+Do this only when similarity and contrast are strong enough.
+
+Copy that is not essential to the main task should be:
+
+Secondary in hierarchy (smaller, less contrast, or farther away).
+
+Avoided where UI patterns and visuals already communicate meaning well.
+
+Motion
+
+Motion is relatively light in the book; mainly hover and feedback.
+
+Guidelines:
+
+Use subtle animations to:
+
+Reveal labels or details on hover (e.g., icon-only nav expanding to show text).
+
+Fill or highlight category icons on hover.
+
+Slide down cart confirmation notifications.
+
+Keep motion:
+
+Fast (a few hundred ms).
+
+Purposeful (reinforcing feedback or hierarchy, not just decoration).
+
+Consistent for similar interactions.
+
+Checklists
+Per-Screen Design Checklist
+
+Visual Hierarchy

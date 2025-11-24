@@ -1,10 +1,22 @@
 """Main entry point for DougHub PyQt6 application."""
 
+import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
+# Force qfluentwidgets to use PyQt6
+os.environ["QT_API"] = "pyqt6"
+
+# Import QtWebEngineWidgets before QApplication to avoid OpenGL context sharing issues
+try:
+    from PyQt6.QtWebEngineWidgets import QWebEngineView  # noqa: F401
+except ImportError:
+    pass  # Handle case where WebEngine is not installed/needed for some tests
+
 from PyQt6.QtWidgets import QApplication, QMessageBox
+from qfluentwidgets import Theme, setTheme
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -13,8 +25,9 @@ from doughub.anki_client.repository import AnkiRepository
 from doughub.notebook.manager import NotesiumManager
 from doughub.notebook.sync import scan_and_parse_notes
 from doughub.persistence.repository import QuestionRepository
+from doughub.preflight import run_preflight_checks
 from doughub.ui.main_window import MainWindow
-from doughub.ui.styles import STYLESHEET
+from doughub.utils.logging import setup_logging
 
 logger = logging.getLogger(__name__)
 
@@ -61,19 +74,45 @@ def main() -> int:
     Returns:
         Exit code (0 for success, non-zero for error).
     """
-    # Set up logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description="DougHub - Anki deck management")
+    parser.add_argument(
+        "--run-preflight",
+        action="store_true",
+        help="Run preflight validation checks (optional, normally only in tests)",
     )
+    args = parser.parse_args()
+
+    # Set up logging with custom formatting and Qt handler
+    qt_log_handler = setup_logging(level=logging.INFO)
+
+    # Run preflight checks only if explicitly requested
+    preflight_report = None
+    if args.run_preflight:
+        logger.info("Running preflight validation checks...")
+        preflight_report = run_preflight_checks()
+
+        # Handle fatal errors - abort startup
+        if preflight_report.has_fatal:
+            print("\n=== FATAL ERROR: Application cannot start ===", file=sys.stderr)
+            for msg in preflight_report.fatal_messages:
+                print(f"  ❌ {msg}", file=sys.stderr)
+            print("\nPlease fix the above errors and try again.\n", file=sys.stderr)
+            return 1
+
+        # Log warnings (will be shown in UI after QApplication starts)
+        if preflight_report.warnings:
+            logger.warning(
+                f"Application starting with {len(preflight_report.warnings)} warning(s)"
+            )
+    else:
+        # Preflight checks are optional - mainly for test/CI environments
+        logger.debug("Preflight checks not requested (use --run-preflight to enable)")
 
     # Create Qt application
     app = QApplication(sys.argv)
     app.setApplicationName("DougHub")
-    app.setStyleSheet(STYLESHEET)
-
-    # Initialize Notesium manager
-    notesium_manager = NotesiumManager()
+    setTheme(Theme.DARK)
 
     # Initialize database session for persistence
     engine = create_engine(config.DATABASE_URL)
@@ -83,6 +122,9 @@ def main() -> int:
 
     # Sync metadata from note files to database
     _sync_note_metadata(question_repository)
+
+    # Initialize Notesium manager (after QApplication)
+    notesium_manager = NotesiumManager()
 
     try:
         # Initialize backend
@@ -109,8 +151,28 @@ def main() -> int:
             logger.warning("Notesium failed to start. Notebook features will be unavailable.")
 
         # Create and show main window
-        window = MainWindow(repository, notesium_manager, question_repository)
+        window = MainWindow(repository, notesium_manager, question_repository, qt_log_handler)
         window.show()
+
+        # Display preflight warnings in the UI (if preflight was run)
+        if preflight_report and preflight_report.warnings:
+            from PyQt6.QtCore import Qt, QTimer
+            from qfluentwidgets import InfoBar, InfoBarPosition
+
+            # Use QTimer to show warnings after window is fully displayed
+            def show_warnings() -> None:
+                for warning in preflight_report.warnings:
+                    InfoBar.warning(
+                        title="Startup Warning",
+                        content=warning,
+                        orient=Qt.Orientation.Vertical,
+                        isClosable=True,
+                        position=InfoBarPosition.TOP_RIGHT,
+                        duration=5000,
+                        parent=window,
+                    )
+
+            QTimer.singleShot(500, show_warnings)
 
         try:
             return app.exec()

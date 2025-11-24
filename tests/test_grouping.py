@@ -1,10 +1,12 @@
 
 import sys
+from collections.abc import Generator
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 # Add scripts directory to path to import extraction_server
@@ -16,7 +18,7 @@ from doughub.models import Base, Question, Source
 
 
 @pytest.fixture
-def engine():
+def engine() -> Engine:
     """Create an in-memory SQLite engine for testing."""
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
@@ -24,7 +26,7 @@ def engine():
 
 
 @pytest.fixture
-def session(engine):
+def session(engine: Engine) -> Generator[Session, None, None]:
     """Create a database session for testing."""
     SessionLocal = sessionmaker(bind=engine)
     session = SessionLocal()
@@ -126,7 +128,7 @@ class TestAutomaticGrouping:
         q2 = self.create_question(session, source, "q2", base_time + timedelta(minutes=2))
         _group_question_automatically(q2, session)
         session.commit()
-        assert q2.parent_id == q1.question_id  # type: ignore
+        assert q2.parent_id == q1.question_id
 
         # Q3: Child of Q1 (3 mins later than Q1)
         # Note: Logic looks for parent created within 5 mins of Q3.
@@ -137,4 +139,4 @@ class TestAutomaticGrouping:
         _group_question_automatically(q3, session)
         session.commit()
 
-        assert q3.parent_id == q1.question_id  # type: ignore
+        assert q3.parent_id == q1.question_id

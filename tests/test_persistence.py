@@ -2,26 +2,41 @@
 
 import json
 import tempfile
+import time
 from pathlib import Path
+from typing import Any
 
 import pytest
-from sqlalchemy import create_engine
+from unittest.mock import patch
+from sqlalchemy import create_engine, event
+from sqlalchemy.exc import OperationalError, IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import inspect, text
+from alembic.config import Config
+from alembic import command
 
 from doughub.models import Base, Media, Question, Source
 from doughub.persistence import QuestionRepository
 
 
 @pytest.fixture
-def engine():
+def engine() -> Any:
     """Create an in-memory SQLite engine for testing."""
     engine = create_engine("sqlite:///:memory:")
+    
+    # Enable foreign keys for SQLite
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
     Base.metadata.create_all(engine)
     return engine
 
 
 @pytest.fixture
-def session(engine):
+def session(engine: Any) -> Any:
     """Create a database session for testing."""
     SessionLocal = sessionmaker(bind=engine)
     session = SessionLocal()
@@ -30,7 +45,7 @@ def session(engine):
 
 
 @pytest.fixture
-def repo(session):
+def repo(session: Session) -> QuestionRepository:
     """Create a QuestionRepository for testing."""
     return QuestionRepository(session)
 
@@ -349,13 +364,13 @@ class TestIngestionIntegration:
             assert len(all_questions) == 3
 
             # Verify Q1 has 2 media files
-            peerprep_id: int = peerprep.source_id  # type: ignore
+            peerprep_id: int = peerprep.source_id
             q1 = repo.get_question_by_source_key(peerprep_id, "Q1")
             assert q1 is not None
             assert len(q1.media) == 2
 
             # Verify Q2 has 1 media file
-            mksap_id: int = mksap.source_id  # type: ignore
+            mksap_id: int = mksap.source_id
             q2 = repo.get_question_by_source_key(mksap_id, "Q2")
             assert q2 is not None
             assert len(q2.media) == 1
@@ -584,4 +599,143 @@ class TestModels:
 
         assert len(question.media) == 2
         assert question.source.name == "MKSAP"
+
+
+class TestPersistenceHardening:
+    """Tests for persistence layer hardening (schema, integrity, scale, corruption)."""
+
+    def test_schema_evolution(self, tmp_path):
+        """Test that schema migrations can be applied and rolled back."""
+        # Create a temporary SQLite database
+        db_path = tmp_path / "test_migration.db"
+        db_url = f"sqlite:///{db_path}"
+        
+        # Patch config.DATABASE_URL so env.py picks it up
+        with patch("doughub.config.DATABASE_URL", db_url):
+            # Create alembic config
+            alembic_cfg = Config("alembic.ini")
+            alembic_cfg.set_main_option("script_location", "alembic")
+
+            # Run migrations up to head
+            command.upgrade(alembic_cfg, "head")
+            
+            # Verify tables exist
+            engine = create_engine(db_url)
+            inspector = inspect(engine)
+            tables = inspector.get_table_names()
+            assert "questions" in tables
+            assert "sources" in tables
+            assert "media" in tables
+            
+            # Downgrade to base
+            command.downgrade(alembic_cfg, "base")
+            
+            # Verify tables are gone (or at least the ones created by migrations)
+            inspector = inspect(engine)
+            tables = inspector.get_table_names()
+            # Note: alembic_version table might remain
+            assert "questions" not in tables
+
+    def test_relational_integrity_orphans(self, session):
+        """Test that deleting a source cascades to questions (if configured) or raises error."""
+        # Create source and question
+        source = Source(name="IntegritySource")
+        session.add(source)
+        session.flush()
+        
+        question = Question(
+            source_id=source.source_id,
+            source_question_key="q1",
+            raw_html="html",
+            raw_metadata_json="{}"
+        )
+        session.add(question)
+        session.commit()
+        
+        # Delete source
+        session.delete(source)
+        
+        # Check behavior based on cascade configuration in models.py
+        # Source.questions has cascade="all, delete-orphan"
+        session.commit()
+        
+        # Verify question is deleted
+        assert session.query(Question).filter_by(source_question_key="q1").first() is None
+
+    def test_relational_integrity_fk_constraint(self, session):
+        """Test that creating a question with invalid source_id fails."""
+        question = Question(
+            source_id=99999, # Invalid ID
+            source_question_key="q1",
+            raw_html="html",
+            raw_metadata_json="{}"
+        )
+        session.add(question)
+        
+        with pytest.raises(IntegrityError):
+            session.commit()
+            
+    @pytest.mark.slow
+    def test_scale_performance(self, session):
+        """Test performance with large number of records."""
+        # Create source
+        source = Source(name="ScaleSource")
+        session.add(source)
+        session.flush()
+        
+        # Insert 1000 questions
+        questions = []
+        for i in range(1000):
+            questions.append(Question(
+                source_id=source.source_id,
+                source_question_key=f"q{i}",
+                raw_html="html",
+                raw_metadata_json="{}"
+            ))
+        
+        start_time = time.time()
+        session.add_all(questions)
+        session.commit()
+        end_time = time.time()
+        
+        duration = end_time - start_time
+        # This is a loose check, mainly to ensure it doesn't timeout or take forever
+        # Adjust threshold based on environment
+        assert duration < 5.0 
+        
+        # Query performance
+        start_time = time.time()
+        _ = session.query(Question).filter(Question.source_id == source.source_id).all()
+        end_time = time.time()
+        
+        query_duration = end_time - start_time
+        assert query_duration < 1.0
+
+    def test_corruption_handling_locked_db(self, tmp_path):
+        """Test handling of locked database."""
+        db_path = tmp_path / "locked.db"
+        db_url = f"sqlite:///{db_path}"
+        
+        engine = create_engine(db_url)
+        Base.metadata.create_all(engine)
+        
+        # Create a connection and lock the DB
+        conn1 = engine.connect()
+        trans1 = conn1.begin()
+        conn1.execute(text("INSERT INTO sources (name) VALUES ('LockedSource')"))
+        
+        # Try to access from another connection (simulating another process/thread)
+        # SQLite defaults to 5 second timeout
+        engine2 = create_engine(db_url, connect_args={'timeout': 0.1})
+        Session2 = sessionmaker(bind=engine2)
+        session2 = Session2()
+        
+        try:
+            with pytest.raises(OperationalError, match="database is locked"):
+                session2.execute(text("INSERT INTO sources (name) VALUES ('AnotherSource')"))
+                session2.commit()
+        finally:
+            trans1.rollback()
+            conn1.close()
+            session2.close()
 

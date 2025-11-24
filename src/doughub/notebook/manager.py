@@ -48,19 +48,18 @@ class NotesiumManager:
             self.notes_dir.mkdir(parents=True, exist_ok=True)
             logger.info(f"Notes directory ready: {self.notes_dir}")
         except Exception as e:
-            logger.error(f"Failed to create notes directory {self.notes_dir}: {e}")
+            logger.error(f"Failed to create notes directory {self.notes_dir}: {e}", extra={"directory": str(self.notes_dir)})
             return False
 
-        # Check if port is already in use
-        if self._check_port_in_use():
-            logger.warning(f"Port {self.port} already in use")
-            # Try to connect anyway - maybe Notesium is already running
-            if self._health_check():
-                logger.info("Notesium appears to be already running")
-                self._is_healthy = True
-                return True
-            logger.error("Port in use but health check failed")
-            return False
+        # Perform health check first to see if Notesium is already running
+        logger.debug(f"Checking if Notesium is already running on port {self.port}...")
+        if self._health_check():
+            logger.info(f"Notesium already running on port {self.port}", extra={"port": self.port, "url": self.url})
+            self._is_healthy = True
+            return True
+
+        # Notesium not running, attempt to start it
+        logger.info(f"Notesium not running, attempting to start server...", extra={"port": self.port})
 
         # Start Notesium process
         try:
@@ -95,7 +94,10 @@ class NotesiumManager:
                 "--writable",
             ]
 
-            logger.info(f"Starting Notesium with command: {' '.join(cmd)}")
+            logger.info(
+                f"Starting Notesium server process...",
+                extra={"command": ' '.join(cmd), "port": self.port}
+            )
             logger.debug(f"Working directory: {Path.cwd()}")
             logger.debug(f"Notes directory (absolute): {self.notes_dir.absolute()}")
 
@@ -117,7 +119,10 @@ class NotesiumManager:
             for _attempt in range(max_attempts):
                 time.sleep(0.5)
                 if self._health_check():
-                    logger.info(f"Notesium started successfully on port {self.port}")
+                    logger.info(
+                        "Notesium server started successfully",
+                        extra={"port": self.port, "url": self.url}
+                    )
                     self._is_healthy = True
                     return True
 
@@ -149,13 +154,18 @@ class NotesiumManager:
 
         except FileNotFoundError as e:
             logger.error(
-                f"'notesium' binary not found in PATH. "
-                f"Please install Notesium from https://github.com/alonswartz/notesium/releases/latest. "
-                f"Error: {e}"
+                "Notesium binary not found - please install from GitHub releases",
+                extra={
+                    "error": str(e),
+                    "install_url": "https://github.com/alonswartz/notesium/releases/latest"
+                }
             )
             return False
         except Exception as e:
-            logger.exception(f"Failed to start Notesium: {e}")
+            logger.exception(
+                "Failed to start Notesium server",
+                extra={"port": self.port, "notes_dir": str(self.notes_dir)}
+            )
             if self.process:
                 try:
                     stdout = self.process.stdout.read().decode() if self.process.stdout else ""

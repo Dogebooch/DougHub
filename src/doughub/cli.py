@@ -7,6 +7,7 @@ and other development/operational tasks.
 import os
 import subprocess
 import sys
+from typing import cast
 
 import typer
 
@@ -304,7 +305,7 @@ def check_notebook_integrity() -> None:
         questions_with_notes = session.execute(stmt).scalars().all()
 
         for question in questions_with_notes:
-            note_path = Path(question.note_path)
+            note_path = Path(cast(str, question.note_path))
 
             # Check if file exists
             if not note_path.exists():
@@ -352,17 +353,17 @@ def check_notebook_integrity() -> None:
 
                     # Check if question exists in DB
                     stmt = select(Question).where(Question.question_id == question_id)
-                    question = session.execute(stmt).scalar_one_or_none()
+                    db_question = session.execute(stmt).scalar_one_or_none()
 
-                    if question is None:
+                    if db_question is None:
                         errors.append(
                             f"Orphaned note file: question_id={question_id}, "
                             f"path={note_file}"
                         )
-                    elif question.note_path != str(note_file):
+                    elif db_question.note_path != str(note_file):
                         warnings.append(
                             f"Note path mismatch: question_id={question_id}, "
-                            f"DB path={question.note_path}, actual path={note_file}"
+                            f"DB path={db_question.note_path}, actual path={note_file}"
                         )
 
                 except Exception as e:

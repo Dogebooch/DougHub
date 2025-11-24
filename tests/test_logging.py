@@ -3,12 +3,13 @@
 import logging
 
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from doughub.models import Log
 from doughub.persistence.logging_handler import DatabaseLogHandler
 
 
-def test_database_log_handler_persists_logs(test_db_session):
+def test_database_log_handler_persists_logs(test_db_session: Session) -> None:
     """Test that log messages are persisted to the database."""
     # Create logger with database handler
     logger = logging.getLogger("test_logger")
@@ -40,7 +41,7 @@ def test_database_log_handler_persists_logs(test_db_session):
     assert "Test error message" in logs[2].message
 
 
-def test_database_log_handler_respects_level_threshold(test_db_session):
+def test_database_log_handler_respects_level_threshold(test_db_session: Session) -> None:
     """Test that log messages below threshold are not persisted."""
     logger = logging.getLogger("test_logger_threshold")
     logger.setLevel(logging.DEBUG)
@@ -66,7 +67,7 @@ def test_database_log_handler_respects_level_threshold(test_db_session):
     assert logs[1].level == "ERROR"
 
 
-def test_log_model_attributes(test_db_session):
+def test_log_model_attributes(test_db_session: Session) -> None:
     """Test that Log model stores all required attributes."""
     logger = logging.getLogger("test_logger_attrs")
     logger.setLevel(logging.INFO)
@@ -87,7 +88,7 @@ def test_log_model_attributes(test_db_session):
     assert log.timestamp is not None
 
 
-def test_database_log_handler_with_formatter(test_db_session):
+def test_database_log_handler_with_formatter(test_db_session: Session) -> None:
     """Test that custom formatters work with the handler."""
     logger = logging.getLogger("test_logger_format")
     logger.setLevel(logging.INFO)

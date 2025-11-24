@@ -4,16 +4,19 @@ import logging
 
 from PyQt6.QtCore import pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
-    QComboBox,
     QFormLayout,
     QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QPushButton,
-    QScrollArea,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
+)
+from qfluentwidgets import (
+    ComboBox,
+    LineEdit,
+    PrimaryPushButton,
+    PushButton,
+    SmoothScrollArea,
+    TextEdit,
+    TitleLabel,
 )
 
 from doughub.anki_client.repository import AnkiRepository
@@ -45,7 +48,7 @@ class CardEditorView(QWidget):
         self.repository = repository
         self._mode: str = "add"  # "add" or "edit"
         self._current_note_id: int | None = None
-        self._field_widgets: dict[str, QTextEdit | QLineEdit] = {}
+        self._field_widgets: dict[str, TextEdit | LineEdit] = {}
         self._setup_ui()
         self._connect_signals()
         self._load_decks_and_models()
@@ -55,24 +58,24 @@ class CardEditorView(QWidget):
         main_layout = QVBoxLayout(self)
 
         # Title label
-        self.title_label = QLabel("Add Note")
-        self.title_label.setStyleSheet("font-size: 16px; font-weight: bold;")
+        self.title_label = TitleLabel("Add Note")
         main_layout.addWidget(self.title_label)
 
         # Deck and model selection
         selection_layout = QFormLayout()
 
-        self.deck_combo = QComboBox()
+        self.deck_combo = ComboBox()
         selection_layout.addRow("Deck:", self.deck_combo)
 
-        self.model_combo = QComboBox()
+        self.model_combo = ComboBox()
         selection_layout.addRow("Note Type:", self.model_combo)
 
         main_layout.addLayout(selection_layout)
 
         # Scrollable area for dynamic fields
-        scroll_area = QScrollArea()
+        scroll_area = SmoothScrollArea()
         scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(SmoothScrollArea.Shape.NoFrame)
 
         self.fields_widget = QWidget()
         self.fields_layout = QFormLayout(self.fields_widget)
@@ -83,8 +86,8 @@ class CardEditorView(QWidget):
         # Buttons
         button_layout = QHBoxLayout()
 
-        self.save_button = QPushButton("Save")
-        self.cancel_button = QPushButton("Cancel")
+        self.save_button = PrimaryPushButton("Save")
+        self.cancel_button = PushButton("Cancel")
 
         button_layout.addStretch()
         button_layout.addWidget(self.save_button)
@@ -151,14 +154,14 @@ class CardEditorView(QWidget):
 
         # Create new field widgets
         for field_name in field_names:
-            # Use QTextEdit for multiline fields, QLineEdit for single-line
+            # Use TextEdit for multiline fields, LineEdit for single-line
             # This is a simple heuristic; could be improved
-            widget: QTextEdit | QLineEdit
+            widget: TextEdit | LineEdit
             if "Back" in field_name or len(field_names) <= 2:
-                widget = QTextEdit()
+                widget = TextEdit()
                 widget.setMaximumHeight(100)
             else:
-                widget = QLineEdit()
+                widget = LineEdit()
 
             self._field_widgets[field_name] = widget
             self.fields_layout.addRow(f"{field_name}:", widget)
@@ -171,7 +174,7 @@ class CardEditorView(QWidget):
         """
         field_values = {}
         for field_name, widget in self._field_widgets.items():
-            if isinstance(widget, QTextEdit):
+            if isinstance(widget, TextEdit):
                 field_values[field_name] = widget.toPlainText()
             else:
                 field_values[field_name] = widget.text()
@@ -186,7 +189,7 @@ class CardEditorView(QWidget):
         for field_name, value in field_values.items():
             if field_name in self._field_widgets:
                 widget = self._field_widgets[field_name]
-                if isinstance(widget, QTextEdit):
+                if isinstance(widget, TextEdit):
                     widget.setPlainText(value)
                 else:
                     widget.setText(value)
@@ -236,7 +239,7 @@ class CardEditorView(QWidget):
 
         # Clear all fields
         for widget in self._field_widgets.values():
-            if isinstance(widget, QTextEdit):
+            if isinstance(widget, TextEdit):
                 widget.clear()
             else:
                 widget.setText("")

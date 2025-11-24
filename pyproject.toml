@@ -5,6 +5,7 @@ description = "Python-based tooling for Anki deck management with PyQt6 UI"
 requires-python = ">=3.10"
 dependencies = [
     "PyQt6>=6.6.0",
+    "PyQt6-Fluent-Widgets>=1.0.0",
     "httpx>=0.27.0",
     "click>=8.1.0",
     "flask>=3.0.0",
@@ -23,6 +24,7 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "pytest-mock>=3.12.0",
+    "pytest-cov>=4.1.0",
     "ruff>=0.3.0",
     "black>=24.0.0",
     "mypy>=1.8.0",
@@ -38,6 +40,7 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "--cov=src/doughub --cov-report=term-missing"
 markers = [
     "integration: marks tests that require Anki running with AnkiConnect (deselect with '-m \"not integration\"')",
     "contract_stage0: Stage 0 - Local invariants (no Anki required)",
@@ -82,3 +85,10 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 warn_no_return = true
 strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "qfluentwidgets.*",
+    "pytestqt.*",
+]
+ignore_missing_imports = true

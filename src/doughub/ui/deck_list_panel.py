@@ -3,7 +3,8 @@
 import logging
 
 from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtWidgets import QListWidget, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QVBoxLayout, QWidget
+from qfluentwidgets import ListWidget
 
 from doughub.anki_client.repository import AnkiRepository
 
@@ -38,7 +39,7 @@ class DeckListPanel(QWidget):
         layout = QVBoxLayout(self)
 
         # Create list widget
-        self.deck_list = QListWidget()
+        self.deck_list = ListWidget()
         layout.addWidget(self.deck_list)
 
         # Set layout margins

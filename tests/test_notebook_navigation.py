@@ -13,15 +13,17 @@ import json
 import logging
 import tempfile
 import time
+from collections.abc import Generator
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+from pytestqt.qtbot import QtBot
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from doughub import config
-from doughub.models import Base
+from doughub.models import Base, Question
 from doughub.notebook.manager import NotesiumManager
 from doughub.persistence import QuestionRepository
 from doughub.ui.deck_browser_view import DeckBrowserView
@@ -31,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 
 @pytest.fixture
-def test_db_and_repo():
+def test_db_and_repo() -> Generator[tuple[QuestionRepository, Path, list[Question]], None, None]:
     """Create a temporary database with test data."""
     with tempfile.TemporaryDirectory() as tmpdir:
         # Setup database
@@ -78,7 +80,7 @@ class TestCheckpoint1_NoteOpeningMechanism:
     the target note in the Notesium UI.
     """
 
-    def test_open_note_constructs_correct_url(self, qtbot):
+    def test_open_note_constructs_correct_url(self, qtbot: QtBot) -> None:
         """Test that open_note constructs the correct URL with query parameter."""
         notebook_view = NotebookView()
         qtbot.addWidget(notebook_view)
@@ -95,7 +97,7 @@ class TestCheckpoint1_NoteOpeningMechanism:
         assert "?file=test-note.md" in current_url
         assert "http://localhost:3030" in current_url
 
-    def test_open_note_handles_special_characters(self, qtbot):
+    def test_open_note_handles_special_characters(self, qtbot: QtBot) -> None:
         """Test that open_note properly encodes special characters in paths."""
         notebook_view = NotebookView()
         qtbot.addWidget(notebook_view)
@@ -111,7 +113,7 @@ class TestCheckpoint1_NoteOpeningMechanism:
         assert "notes/test" in current_url
         assert "spaces.md" in current_url
 
-    def test_open_note_handles_empty_path(self, qtbot, caplog):
+    def test_open_note_handles_empty_path(self, qtbot: QtBot, caplog: pytest.LogCaptureFixture) -> None:
         """Test that open_note gracefully handles empty path."""
         notebook_view = NotebookView()
         qtbot.addWidget(notebook_view)
@@ -122,7 +124,7 @@ class TestCheckpoint1_NoteOpeningMechanism:
 
         assert "empty path" in caplog.text
 
-    def test_open_note_handles_invalid_base_url(self, qtbot, caplog):
+    def test_open_note_handles_invalid_base_url(self, qtbot: QtBot, caplog: pytest.LogCaptureFixture) -> None:
         """Test that open_note handles cases where base URL is not set."""
         notebook_view = NotebookView()
         qtbot.addWidget(notebook_view)
@@ -133,12 +135,12 @@ class TestCheckpoint1_NoteOpeningMechanism:
 
         assert "invalid base URL" in caplog.text
 
-    def test_navigation_after_note_creation(self, test_db_and_repo, qtbot):
+    def test_navigation_after_note_creation(self, test_db_and_repo: tuple[QuestionRepository, Path, list[Question]], qtbot: QtBot) -> None:
         """Test that navigation works correctly after creating a new note."""
         repo, notes_dir, questions = test_db_and_repo
 
         # Get first question without a note
-        question_id = int(questions[0].question_id)  # type: ignore[arg-type]
+        question_id = int(questions[0].question_id)
 
         # Create note
         note_path = repo.ensure_note_for_question(question_id)
@@ -159,12 +161,12 @@ class TestCheckpoint1_NoteOpeningMechanism:
         assert "?file=" in current_url
         assert Path(note_path).stem in decoded_url  # Check filename is present
 
-    def test_nonexistent_note_is_recreated_before_navigation(self, test_db_and_repo, qtbot):
+    def test_nonexistent_note_is_recreated_before_navigation(self, test_db_and_repo: tuple[QuestionRepository, Path, list[Question]], qtbot: QtBot) -> None:
         """Test that missing note files are recreated before navigation."""
         repo, notes_dir, questions = test_db_and_repo
 
         # Create a question with a note
-        question_id = int(questions[0].question_id)  # type: ignore[arg-type]
+        question_id = int(questions[0].question_id)
         note_path = repo.ensure_note_for_question(question_id)
         assert note_path is not None
         assert Path(note_path).exists()
@@ -175,6 +177,7 @@ class TestCheckpoint1_NoteOpeningMechanism:
 
         # Ensure note again - should recreate
         note_path_2 = repo.ensure_note_for_question(question_id)
+        assert note_path_2 is not None
         assert note_path_2 == note_path
         assert Path(note_path_2).exists()
 
@@ -195,14 +198,15 @@ class TestCheckpoint2_NewNotesInNotesiumIndex:
     searchable in Notesium without a server restart.
     """
 
-    def test_note_file_created_on_disk(self, test_db_and_repo):
+    def test_note_file_created_on_disk(self, test_db_and_repo: tuple[QuestionRepository, Path, list[Question]]) -> None:
         """Test that note file is physically created on disk."""
         repo, notes_dir, questions = test_db_and_repo
 
-        question_id = int(questions[0].question_id)  # type: ignore[arg-type]
+        question_id = int(questions[0].question_id)
 
         # Verify note doesn't exist yet
         question = repo.get_question_by_id(question_id)
+        assert question is not None
         assert question.note_path is None
 
         # Create note
@@ -214,11 +218,11 @@ class TestCheckpoint2_NewNotesInNotesiumIndex:
         assert Path(note_path).parent == notes_dir
         assert Path(note_path).suffix == ".md"
 
-    def test_note_contains_valid_frontmatter(self, test_db_and_repo):
+    def test_note_contains_valid_frontmatter(self, test_db_and_repo: tuple[QuestionRepository, Path, list[Question]]) -> None:
         """Test that created note contains valid YAML frontmatter."""
         repo, notes_dir, questions = test_db_and_repo
 
-        question_id = int(questions[0].question_id)  # type: ignore[arg-type]
+        question_id = int(questions[0].question_id)
         note_path = repo.ensure_note_for_question(question_id)
 
         assert note_path is not None
@@ -233,13 +237,13 @@ class TestCheckpoint2_NewNotesInNotesiumIndex:
         # Verify content section
         assert "# Notes" in content or "## Notes" in content
 
-    def test_multiple_notes_created_in_sequence(self, test_db_and_repo):
+    def test_multiple_notes_created_in_sequence(self, test_db_and_repo: tuple[QuestionRepository, Path, list[Question]]) -> None:
         """Test that multiple notes can be created in sequence."""
         repo, notes_dir, questions = test_db_and_repo
 
         created_paths = []
         for i in range(3):
-            question_id = int(questions[i].question_id)  # type: ignore[arg-type]
+            question_id = int(questions[i].question_id)
             note_path = repo.ensure_note_for_question(question_id)
             assert note_path is not None
             assert Path(note_path).exists()
@@ -253,7 +257,7 @@ class TestCheckpoint2_NewNotesInNotesiumIndex:
         assert len(set(created_paths)) == 3
 
     @pytest.mark.integration
-    def test_notesium_can_read_new_note(self, test_db_and_repo):
+    def test_notesium_can_read_new_note(self, test_db_and_repo: tuple[QuestionRepository, Path, list[Question]]) -> None:
         """Integration test: Verify Notesium can access a newly created note.
 
         This is a smoke test that verifies the file is accessible.
@@ -261,7 +265,7 @@ class TestCheckpoint2_NewNotesInNotesiumIndex:
         """
         repo, notes_dir, questions = test_db_and_repo
 
-        question_id = int(questions[0].question_id)  # type: ignore[arg-type]
+        question_id = int(questions[0].question_id)
         note_path = repo.ensure_note_for_question(question_id)
 
         assert note_path is not None
@@ -283,14 +287,14 @@ class TestCheckpoint3_NavigationStability:
     UI freezes, crashes, or loss of synchronization.
     """
 
-    def test_rapid_note_creation_no_race_condition(self, test_db_and_repo):
+    def test_rapid_note_creation_no_race_condition(self, test_db_and_repo: tuple[QuestionRepository, Path, list[Question]]) -> None:
         """Test that rapid note creation doesn't cause race conditions."""
         repo, notes_dir, questions = test_db_and_repo
 
         # Rapidly create multiple notes
         created_paths = []
         for i in range(5):
-            question_id = int(questions[i].question_id)  # type: ignore[arg-type]
+            question_id = int(questions[i].question_id)
             note_path = repo.ensure_note_for_question(question_id)
             assert note_path is not None
             created_paths.append(note_path)
@@ -306,7 +310,7 @@ class TestCheckpoint3_NavigationStability:
             assert "question_id:" in content
             assert "# Notes" in content or "## Notes" in content
 
-    def test_navigation_signal_emitted_after_file_creation(self, test_db_and_repo, qtbot):
+    def test_navigation_signal_emitted_after_file_creation(self, test_db_and_repo: tuple[QuestionRepository, Path, list[Question]], qtbot: QtBot) -> None:
         """Test that navigation signal is only emitted after file exists."""
         repo, notes_dir, questions = test_db_and_repo
 
@@ -320,7 +324,7 @@ class TestCheckpoint3_NavigationStability:
         # Track signal emissions
         signal_received = []
 
-        def track_signal(note_path: str):
+        def track_signal(note_path: str) -> None:
             # Verify file exists when signal is emitted
             assert Path(note_path).exists(), f"Signal emitted but file doesn't exist: {note_path}"
             signal_received.append(note_path)
@@ -328,7 +332,7 @@ class TestCheckpoint3_NavigationStability:
         browser.note_ready_for_navigation.connect(track_signal)
 
         # Simulate selecting a question
-        question_id = int(questions[0].question_id)  # type: ignore[arg-type]
+        question_id = int(questions[0].question_id)
 
         # Create note and emit signal manually (simulating the workflow)
         note_path = repo.ensure_note_for_question(question_id)
@@ -339,7 +343,7 @@ class TestCheckpoint3_NavigationStability:
         assert len(signal_received) == 1
         assert signal_received[0] == note_path
 
-    def test_sequential_navigation_updates_url(self, qtbot):
+    def test_sequential_navigation_updates_url(self, qtbot: QtBot) -> None:
         """Test that navigating to multiple notes in sequence updates URL correctly."""
         notebook_view = NotebookView()
         qtbot.addWidget(notebook_view)
@@ -352,7 +356,7 @@ class TestCheckpoint3_NavigationStability:
             current_url = notebook_view.web_view.url().toString()
             assert f"?file={note_path}" in current_url
 
-    def test_notebook_view_remains_responsive_during_navigation(self, qtbot):
+    def test_notebook_view_remains_responsive_during_navigation(self, qtbot: QtBot) -> None:
         """Test that notebook view doesn't block during navigation."""
         notebook_view = NotebookView()
         qtbot.addWidget(notebook_view)
@@ -368,7 +372,7 @@ class TestCheckpoint3_NavigationStability:
         # Navigation should be fast (synchronous URL updates)
         assert elapsed < 1.0, f"Navigation took too long: {elapsed}s"
 
-    def test_error_handling_during_navigation(self, test_db_and_repo, qtbot, caplog):
+    def test_error_handling_during_navigation(self, test_db_and_repo: tuple[QuestionRepository, Path, list[Question]], qtbot: QtBot, caplog: pytest.LogCaptureFixture) -> None:
         """Test that navigation errors are handled gracefully."""
         repo, notes_dir, questions = test_db_and_repo
 
@@ -387,7 +391,7 @@ class TestCheckpoint3_NavigationStability:
 class TestCrossPhaseRegression:
     """Cross-phase regression checks to ensure Phase 1 still works."""
 
-    def test_notesium_manager_startup(self):
+    def test_notesium_manager_startup(self) -> None:
         """Test that NotesiumManager can be instantiated (Phase 1 check)."""
         with tempfile.TemporaryDirectory() as tmpdir:
             notes_dir = Path(tmpdir) / "notes"
@@ -397,11 +401,11 @@ class TestCrossPhaseRegression:
             assert manager.port == 3031
             assert manager.url == "http://localhost:3031"
 
-    def test_stub_creation_still_works(self, test_db_and_repo):
+    def test_stub_creation_still_works(self, test_db_and_repo: tuple[QuestionRepository, Path, list[Question]]) -> None:
         """Test that Phase 1 stub creation still functions correctly."""
         repo, notes_dir, questions = test_db_and_repo
 
-        question_id = int(questions[0].question_id)  # type: ignore[arg-type]
+        question_id = int(questions[0].question_id)
 
         # Create note (Phase 1 functionality)
         note_path = repo.ensure_note_for_question(question_id)
@@ -412,9 +416,10 @@ class TestCrossPhaseRegression:
 
         # Verify database updated
         question = repo.get_question_by_id(question_id)
+        assert question is not None
         assert question.note_path == note_path
 
-    def test_error_state_display_still_works(self, qtbot):
+    def test_error_state_display_still_works(self, qtbot: QtBot) -> None:
         """Test that error display from Phase 1 still works."""
         notebook_view = NotebookView()
         qtbot.addWidget(notebook_view)
@@ -435,7 +440,7 @@ class TestCrossPhaseRegression:
 class TestPerformanceAndStress:
     """Additional performance and stress tests."""
 
-    def test_large_deck_navigation(self, qtbot):
+    def test_large_deck_navigation(self, qtbot: QtBot) -> None:
         """Test navigation with a large number of notes."""
         notebook_view = NotebookView()
         qtbot.addWidget(notebook_view)
@@ -451,7 +456,7 @@ class TestPerformanceAndStress:
         # Should complete in reasonable time
         assert elapsed < 5.0, f"Navigation of 100 notes took too long: {elapsed}s"
 
-    def test_concurrent_note_creation_and_navigation(self, test_db_and_repo, qtbot):
+    def test_concurrent_note_creation_and_navigation(self, test_db_and_repo: tuple[QuestionRepository, Path, list[Question]], qtbot: QtBot) -> None:
         """Test that note creation and navigation can happen rapidly."""
         repo, notes_dir, questions = test_db_and_repo
 
@@ -461,7 +466,7 @@ class TestPerformanceAndStress:
 
         # Create and navigate in rapid succession
         for i in range(5):
-            question_id = int(questions[i].question_id)  # type: ignore[arg-type]
+            question_id = int(questions[i].question_id)
             note_path = repo.ensure_note_for_question(question_id)
 
             assert note_path is not None
@@ -470,11 +475,11 @@ class TestPerformanceAndStress:
             # Verify the file exists at navigation time
             assert Path(note_path).exists()
 
-    def test_memory_leak_prevention(self, test_db_and_repo):
+    def test_memory_leak_prevention(self, test_db_and_repo: tuple[QuestionRepository, Path, list[Question]]) -> None:
         """Test that repeated note creation doesn't cause memory issues."""
         repo, notes_dir, questions = test_db_and_repo
 
-        question_id = int(questions[0].question_id)  # type: ignore[arg-type]
+        question_id = int(questions[0].question_id)
 
         # Call ensure_note many times (should be idempotent)
         for _ in range(100):

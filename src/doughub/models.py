@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from sqlalchemy import (
-    Column,
     DateTime,
     ForeignKey,
     Integer,
@@ -35,12 +34,12 @@ class Source(Base):
 
     __tablename__ = "sources"
 
-    source_id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String(255), unique=True, nullable=False, index=True)
-    description = Column(Text, nullable=True)
+    source_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relationships
-    questions = relationship("Question", back_populates="source", cascade="all, delete-orphan")
+    questions: Mapped[list["Question"]] = relationship("Question", back_populates="source", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"<Source(id={self.source_id}, name='{self.name}')>"
@@ -68,24 +67,24 @@ class Question(Base):
         UniqueConstraint("source_id", "source_question_key", name="uq_source_question"),
     )
 
-    question_id = Column(Integer, primary_key=True, autoincrement=True)
-    source_id = Column(Integer, ForeignKey("sources.source_id"), nullable=False, index=True)
-    source_question_key = Column(String(255), nullable=False, index=True)
-    raw_html = Column(Text, nullable=False)
-    raw_metadata_json = Column(Text, nullable=False)
-    status = Column(String(50), default="extracted", nullable=False)
-    extraction_path = Column(String(512), nullable=True)
+    question_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    source_id: Mapped[int] = mapped_column(Integer, ForeignKey("sources.source_id"), nullable=False, index=True)
+    source_question_key: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    raw_html: Mapped[str] = mapped_column(Text, nullable=False)
+    raw_metadata_json: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(50), default="extracted", nullable=False)
+    extraction_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     note_path: Mapped[str | None] = mapped_column(String, nullable=True)
     tags: Mapped[str | None] = mapped_column(String, nullable=True)
     state: Mapped[str | None] = mapped_column(String, nullable=True)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
-    parent_id = Column(Integer, ForeignKey("questions.question_id"), nullable=True)
+    created_at: Mapped[Any] = mapped_column(DateTime, default=func.now(), nullable=False)
+    updated_at: Mapped[Any] = mapped_column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    parent_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("questions.question_id"), nullable=True)
 
     # Relationships
-    source = relationship("Source", back_populates="questions")
-    media = relationship("Media", back_populates="question", cascade="all, delete-orphan")
-    children = relationship("Question", backref=backref('parent', remote_side=[question_id]), cascade="all, delete-orphan")
+    source: Mapped["Source"] = relationship("Source", back_populates="questions")
+    media: Mapped[list["Media"]] = relationship("Media", back_populates="question", cascade="all, delete-orphan")
+    children: Mapped[list["Question"]] = relationship("Question", backref=backref('parent', remote_side=[question_id]), cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"<Question(id={self.question_id}, source_key='{self.source_question_key}', status='{self.status}')>"
@@ -106,15 +105,15 @@ class Media(Base):
 
     __tablename__ = "media"
 
-    media_id = Column(Integer, primary_key=True, autoincrement=True)
-    question_id = Column(Integer, ForeignKey("questions.question_id"), nullable=False, index=True)
-    media_role = Column(String(50), nullable=False)
-    media_type = Column(String(100), nullable=True)
-    mime_type = Column(String(100), nullable=False)
-    relative_path = Column(String(512), nullable=False)
+    media_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    question_id: Mapped[int] = mapped_column(Integer, ForeignKey("questions.question_id"), nullable=False, index=True)
+    media_role: Mapped[str] = mapped_column(String(50), nullable=False)
+    media_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    relative_path: Mapped[str] = mapped_column(String(512), nullable=False)
 
     # Relationships
-    question = relationship("Question", back_populates="media")
+    question: Mapped["Question"] = relationship("Question", back_populates="media")
 
     def __repr__(self) -> str:
         return f"<Media(id={self.media_id}, role='{self.media_role}', path='{self.relative_path}')>"
@@ -133,11 +132,11 @@ class Log(Base):
 
     __tablename__ = "logs"
 
-    log_id = Column(Integer, primary_key=True, autoincrement=True)
-    level = Column(String(20), nullable=False, index=True)
-    logger_name = Column(String(255), nullable=False, index=True)
-    message = Column(Text, nullable=False)
-    timestamp = Column(DateTime, default=func.now(), nullable=False, index=True)
+    log_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    level: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    logger_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    timestamp: Mapped[Any] = mapped_column(DateTime, default=func.now(), nullable=False, index=True)
 
     def __repr__(self) -> str:
         return f"<Log(id={self.log_id}, level='{self.level}', logger='{self.logger_name}')>"
@@ -200,10 +199,21 @@ class Note:
         Returns:
             A Note instance populated with the response data.
         """
+        # AnkiConnect returns fields as a dict where values might be strings
+        # or dicts like {'value': '...', 'order': 0}
+        raw_fields = data["fields"]
+        processed_fields = {}
+        
+        for key, value in raw_fields.items():
+            if isinstance(value, dict) and "value" in value:
+                processed_fields[key] = value["value"]
+            else:
+                processed_fields[key] = str(value)
+
         return cls(
             note_id=data["noteId"],
             model_name=data["modelName"],
-            fields=data["fields"],
+            fields=processed_fields,
             tags=data.get("tags", []),
             cards=data.get("cards", []),
         )

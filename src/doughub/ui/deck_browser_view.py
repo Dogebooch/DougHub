@@ -3,7 +3,8 @@
 import logging
 
 from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt, pyqtSignal
-from PyQt6.QtWidgets import QTableView, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QVBoxLayout, QWidget
+from qfluentwidgets import TableView
 
 from doughub.anki_client.repository import AnkiRepository
 from doughub.models import Note
@@ -172,14 +173,19 @@ class DeckBrowserView(QWidget):
 
         # Create table view and model
         self.model = NotesTableModel(self)
-        self.table_view = QTableView()
+        self.table_view = TableView(self)
         self.table_view.setModel(self.model)
 
         # Configure table appearance
-        self.table_view.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
-        self.table_view.setSelectionMode(QTableView.SelectionMode.SingleSelection)
+        self.table_view.setSelectionBehavior(TableView.SelectionBehavior.SelectRows)
+        self.table_view.setSelectionMode(TableView.SelectionMode.SingleSelection)
         self.table_view.setAlternatingRowColors(True)
         self.table_view.setSortingEnabled(False)
+
+        # Enable border and rounded corners
+        self.table_view.setBorderVisible(True)
+        self.table_view.setBorderRadius(8)
+        self.table_view.setWordWrap(False)
 
         # Set column stretch
         header = self.table_view.horizontalHeader()

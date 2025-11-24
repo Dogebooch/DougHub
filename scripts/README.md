@@ -56,6 +56,29 @@ Quick verification that AnkiConnect is accessible and the CLI is working.
 
 ## Python Scripts
 
+### `run_preflight_checks.py`
+Standalone script to validate the DougHub runtime environment.
+
+**Purpose**: Performs comprehensive preflight validation checks on the environment including Python version, dependencies, configuration, database health, and external integrations. Designed for CI/CD pipelines and automated testing.
+
+**Usage**:
+```bash
+python scripts/run_preflight_checks.py
+```
+
+**Exit Codes**:
+- `0`: All checks passed (environment healthy)
+- `1`: Fatal errors detected (cannot run application)
+- `2`: Warnings detected (degraded mode possible)
+
+**When to Use**:
+- CI/CD pipelines to validate deployment environment
+- Pre-deployment checks in production
+- Debugging environment issues
+- Automated testing infrastructure
+
+**Note**: The application does not run these checks by default. Use `python src/doughub/main.py --run-preflight` to enable validation at startup.
+
 ### `extraction_server.py`
 Flask server for the Tampermonkey extraction workflow.
 

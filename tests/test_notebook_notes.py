@@ -2,6 +2,7 @@
 
 import json
 import tempfile
+from collections.abc import Generator
 from pathlib import Path
 
 import pytest
@@ -14,7 +15,7 @@ from doughub.persistence import QuestionRepository
 
 
 @pytest.fixture
-def note_repo_db():
+def note_repo_db() -> Generator[tuple[QuestionRepository, Path], None, None]:
     """Create a temporary database and repository for note tests."""
     with tempfile.TemporaryDirectory() as tmpdir:
         # Create database
@@ -42,7 +43,7 @@ def note_repo_db():
 class TestNoteCreation:
     """Test stub note file creation."""
 
-    def test_create_note_for_new_question(self, note_repo_db: tuple) -> None:
+    def test_create_note_for_new_question(self, note_repo_db: tuple[QuestionRepository, Path]) -> None:
         """Test creating a note for a question without one."""
         repo, notes_dir = note_repo_db
 
@@ -57,7 +58,7 @@ class TestNoteCreation:
         question = repo.add_question(question_data)
         repo.commit()
 
-        question_id = int(question.question_id)  # type: ignore[arg-type]
+        question_id = int(question.question_id)
 
         # Create note
         note_path_result = repo.ensure_note_for_question(question_id)
@@ -77,7 +78,7 @@ class TestNoteCreation:
         assert "source_key: Q001" in content
         assert "# Notes" in content
 
-    def test_idempotent_note_creation(self, note_repo_db: tuple) -> None:
+    def test_idempotent_note_creation(self, note_repo_db: tuple[QuestionRepository, Path]) -> None:
         """Test that calling ensure_note multiple times doesn't recreate the note."""
         repo, notes_dir = note_repo_db
 
@@ -92,11 +93,12 @@ class TestNoteCreation:
         question = repo.add_question(question_data)
         repo.commit()
 
-        question_id = int(question.question_id)  # type: ignore[arg-type]
+        question_id = int(question.question_id)
 
         # Create note first time
         note_path_1 = repo.ensure_note_for_question(question_id)
         repo.commit()
+        assert note_path_1 is not None
 
         # Add custom content
         with open(note_path_1, "a", encoding="utf-8") as f:
@@ -105,6 +107,7 @@ class TestNoteCreation:
         # Call ensure_note again
         note_path_2 = repo.ensure_note_for_question(question_id)
         repo.commit()
+        assert note_path_2 is not None
 
         # Should return same path
         assert note_path_1 == note_path_2
@@ -116,7 +119,7 @@ class TestNoteCreation:
         assert "## My Custom Notes" in content
         assert "This should be preserved" in content
 
-    def test_note_path_updated_in_database(self, note_repo_db: tuple) -> None:
+    def test_note_path_updated_in_database(self, note_repo_db: tuple[QuestionRepository, Path]) -> None:
         """Test that note_path is correctly updated in the database."""
         repo, _notes_dir = note_repo_db
 
@@ -131,7 +134,7 @@ class TestNoteCreation:
         question = repo.add_question(question_data)
         repo.commit()
 
-        question_id = int(question.question_id)  # type: ignore[arg-type]
+        question_id = int(question.question_id)
 
         # Initially, note_path should be None
         assert question.note_path is None
@@ -145,7 +148,7 @@ class TestNoteCreation:
         assert updated_question is not None
         assert updated_question.note_path == note_path
 
-    def test_note_with_metadata_fields(self, note_repo_db: tuple) -> None:
+    def test_note_with_metadata_fields(self, note_repo_db: tuple[QuestionRepository, Path]) -> None:
         """Test that metadata fields are included in YAML frontmatter."""
         repo, _notes_dir = note_repo_db
 
@@ -166,10 +169,11 @@ class TestNoteCreation:
         question = repo.add_question(question_data)
         repo.commit()
 
-        question_id = int(question.question_id)  # type: ignore[arg-type]
+        question_id = int(question.question_id)
 
         # Create note
         note_path = repo.ensure_note_for_question(question_id)
+        assert note_path is not None
 
         # Check frontmatter includes metadata
         with open(note_path, encoding="utf-8") as f:
@@ -182,7 +186,7 @@ class TestNoteCreation:
 class TestEdgeCases:
     """Test edge cases in note creation."""
 
-    def test_nonexistent_question(self, note_repo_db: tuple) -> None:
+    def test_nonexistent_question(self, note_repo_db: tuple[QuestionRepository, Path]) -> None:
         """Test handling of nonexistent question ID."""
         repo, _notes_dir = note_repo_db
 
@@ -191,7 +195,7 @@ class TestEdgeCases:
 
         assert note_path is None
 
-    def test_special_characters_in_filename(self, note_repo_db: tuple) -> None:
+    def test_special_characters_in_filename(self, note_repo_db: tuple[QuestionRepository, Path]) -> None:
         """Test that special characters are sanitized in filenames."""
         repo, _notes_dir = note_repo_db
 
@@ -206,7 +210,7 @@ class TestEdgeCases:
         question = repo.add_question(question_data)
         repo.commit()
 
-        question_id = int(question.question_id)  # type: ignore[arg-type]
+        question_id = int(question.question_id)
 
         # Create note
         note_path = repo.ensure_note_for_question(question_id)
@@ -217,7 +221,7 @@ class TestEdgeCases:
         assert "/" not in filename
         assert "\\" not in filename
 
-    def test_long_question_key(self, note_repo_db: tuple) -> None:
+    def test_long_question_key(self, note_repo_db: tuple[QuestionRepository, Path]) -> None:
         """Test handling of very long question keys."""
         repo, _notes_dir = note_repo_db
 
@@ -233,7 +237,7 @@ class TestEdgeCases:
         question = repo.add_question(question_data)
         repo.commit()
 
-        question_id = int(question.question_id)  # type: ignore[arg-type]
+        question_id = int(question.question_id)
 
         # Should still create note successfully
         note_path = repo.ensure_note_for_question(question_id)
@@ -242,7 +246,7 @@ class TestEdgeCases:
         assert Path(note_path).exists()
 
     def test_note_creation_recreates_deleted_directory(
-        self, note_repo_db: tuple
+        self, note_repo_db: tuple[QuestionRepository, Path]
     ) -> None:
         """Test that note creation recreates notes directory if deleted."""
         repo, notes_dir = note_repo_db
@@ -258,11 +262,12 @@ class TestEdgeCases:
         question = repo.add_question(question_data)
         repo.commit()
 
-        question_id = int(question.question_id)  # type: ignore[arg-type]
+        question_id = int(question.question_id)
 
         # Delete notes directory
         if notes_dir.exists():
             import shutil
+
             shutil.rmtree(notes_dir)
 
         assert not notes_dir.exists()
@@ -274,7 +279,7 @@ class TestEdgeCases:
         assert notes_dir.exists()
         assert Path(note_path).exists()
 
-    def test_yaml_frontmatter_format(self, note_repo_db: tuple) -> None:
+    def test_yaml_frontmatter_format(self, note_repo_db: tuple[QuestionRepository, Path]) -> None:
         """Test that YAML frontmatter is properly formatted."""
         repo, _notes_dir = note_repo_db
 
@@ -289,10 +294,11 @@ class TestEdgeCases:
         question = repo.add_question(question_data)
         repo.commit()
 
-        question_id = int(question.question_id)  # type: ignore[arg-type]
+        question_id = int(question.question_id)
 
         # Create note
         note_path = repo.ensure_note_for_question(question_id)
+        assert note_path is not None
 
         # Parse frontmatter
         with open(note_path, encoding="utf-8") as f:
@@ -302,7 +308,9 @@ class TestEdgeCases:
         assert lines[0].strip() == "---"
 
         # Find closing ---
-        closing_index = next(i for i, line in enumerate(lines[1:], 1) if line.strip() == "---")
+        closing_index = next(
+            i for i, line in enumerate(lines[1:], 1) if line.strip() == "---"
+        )
 
         # Everything between should be valid YAML-like content
         frontmatter = lines[1:closing_index]

@@ -1,8 +1,8 @@
 from PyQt6.QtCore import Qt, pyqtSlot
 from PyQt6.QtWidgets import (
     QHBoxLayout,
+    QLabel,
     QMainWindow,
-    QPushButton,
     QSplitter,
     QStackedWidget,
     QStatusBar,
@@ -10,18 +10,22 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from qfluentwidgets import PrimaryPushButton
 
 from doughub.anki_client.repository import AnkiRepository
 from doughub.notebook.manager import NotesiumManager
 from doughub.persistence.repository import QuestionRepository
+from doughub.services import HealthMonitor
 from doughub.ui.card_editor_view import CardEditorView
 from doughub.ui.deck_browser_view import DeckBrowserView
 from doughub.ui.deck_list_panel import DeckListPanel
+from doughub.ui.diagnostics_view import DiagnosticsView
 from doughub.ui.dto import QuestionDTO
 from doughub.ui.manage_group_dialog import ManageGroupDialog
 from doughub.ui.notebook_view import NotebookView
 from doughub.ui.question_browser_view import QuestionBrowserView
 from doughub.ui.question_detail_view import QuestionDetailView
+from doughub.utils.logging import QtTextEditHandler
 
 
 class MainWindow(QMainWindow):
@@ -36,6 +40,7 @@ class MainWindow(QMainWindow):
         repository: AnkiRepository,
         notesium_manager: NotesiumManager,
         question_repository: QuestionRepository | None = None,
+        log_handler: QtTextEditHandler | None = None,
         parent: QWidget | None = None,
     ) -> None:
         """Initialize the main window.
@@ -44,14 +49,26 @@ class MainWindow(QMainWindow):
             repository: AnkiRepository instance for backend operations.
             notesium_manager: NotesiumManager instance for notebook features.
             question_repository: Optional QuestionRepository for notebook integration.
+            log_handler: Optional logging handler for diagnostics view.
             parent: Optional parent widget.
         """
         super().__init__(parent)
         self.repository = repository
         self.notesium_manager = notesium_manager
         self.question_repository = question_repository
+        self.log_handler = log_handler
         self._setup_ui()
         self._connect_signals()
+
+        # Set up health monitoring
+        self.health_monitor = HealthMonitor(
+            anki_repository=repository,
+            notesium_manager=notesium_manager,
+            parent=self
+        )
+        self.health_monitor.ankiStatusChanged.connect(self._on_anki_status_changed)
+        self.health_monitor.notesiumStatusChanged.connect(self._on_notesium_status_changed)
+        self.health_monitor.start()
 
         # Load questions if repository is available
         if self.question_repository:
@@ -83,10 +100,11 @@ class MainWindow(QMainWindow):
         # --- Anki Tab ---
         anki_tab = QWidget()
         anki_layout = QVBoxLayout(anki_tab)
+        anki_layout.setContentsMargins(10, 10, 10, 10)
 
         # Add toolbar with Add Note button (Anki specific)
         toolbar = QHBoxLayout()
-        self.add_note_button = QPushButton("Add Note")
+        self.add_note_button = PrimaryPushButton("Add Note")
         toolbar.addWidget(self.add_note_button)
         toolbar.addStretch()
         anki_layout.addLayout(toolbar)
@@ -117,6 +135,7 @@ class MainWindow(QMainWindow):
         import logging
         logger = logging.getLogger(__name__)
         logger.info("Creating NotebookView widget...")
+        from doughub.ui.notebook_view import NotebookView
         self.notebook_view = NotebookView()
         logger.info("Adding NotebookView to splitter...")
         self.anki_splitter.addWidget(self.notebook_view)
@@ -141,11 +160,12 @@ class MainWindow(QMainWindow):
         self.anki_splitter.setSizes([250, 550, 400])
 
         anki_layout.addWidget(self.anki_splitter)
-        self.tab_widget.addTab(anki_tab, "Anki")
+        self.tab_widget.addTab(anki_tab, "Anki Decks")
 
         # --- Extracted Questions Tab ---
         questions_tab = QWidget()
         questions_layout = QVBoxLayout(questions_tab)
+        questions_layout.setContentsMargins(10, 10, 10, 10)
 
         self.questions_splitter = QSplitter(Qt.Orientation.Horizontal)
 
@@ -160,9 +180,44 @@ class MainWindow(QMainWindow):
         questions_layout.addWidget(self.questions_splitter)
         self.tab_widget.addTab(questions_tab, "Extracted Questions")
 
-        # Create status bar
+        # --- Diagnostics Tab ---
+        diagnostics_tab = QWidget()
+        diagnostics_layout = QVBoxLayout(diagnostics_tab)
+        diagnostics_layout.setContentsMargins(10, 10, 10, 10)
+
+        self.diagnostics_view = DiagnosticsView()
+        diagnostics_layout.addWidget(self.diagnostics_view)
+        self.tab_widget.addTab(diagnostics_tab, "Diagnostics")
+
+        # Connect log handler to diagnostics view
+        if self.log_handler:
+            self.log_handler.set_widget(self.diagnostics_view.get_log_widget())
+
+        # Create status bar with service indicators
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
+        
+        # Add service status indicators
+        status_widget = QWidget()
+        status_layout = QHBoxLayout(status_widget)
+        status_layout.setContentsMargins(5, 0, 5, 0)
+        status_layout.setSpacing(15)
+        
+        # Anki status
+        self.anki_status_indicator = QLabel("●")
+        self.anki_status_indicator.setStyleSheet("color: gray; font-size: 14px;")
+        self.anki_status_indicator.setToolTip("AnkiConnect: Unknown")
+        status_layout.addWidget(QLabel("Anki:"))
+        status_layout.addWidget(self.anki_status_indicator)
+        
+        # Notesium status
+        self.notesium_status_indicator = QLabel("●")
+        self.notesium_status_indicator.setStyleSheet("color: gray; font-size: 14px;")
+        self.notesium_status_indicator.setToolTip("Notesium: Unknown")
+        status_layout.addWidget(QLabel("Notesium:"))
+        status_layout.addWidget(self.notesium_status_indicator)
+        
+        self.status_bar.addPermanentWidget(status_widget)
         self.status_bar.showMessage("Ready")
 
     def _connect_signals(self) -> None:
@@ -204,7 +259,7 @@ class MainWindow(QMainWindow):
             # or query the session. Since we have the ID, let's use the repository.
             child = self.question_repository.get_question_by_id(child_id)
             if child:
-                child.parent_id = None  # type: ignore
+                child.parent_id = None
                 session.commit()
                 self.show_status(f"Unlinked question {child_id}")
                 # Refresh browser
@@ -299,3 +354,33 @@ class MainWindow(QMainWindow):
             timeout: Duration in milliseconds (0 for permanent).
         """
         self.status_bar.showMessage(message, timeout)
+
+    @pyqtSlot(bool, str)
+    def _on_anki_status_changed(self, is_healthy: bool, status_message: str) -> None:
+        """Handle AnkiConnect status change.
+
+        Args:
+            is_healthy: Whether Anki is healthy.
+            status_message: Status description.
+        """
+        if is_healthy:
+            self.anki_status_indicator.setStyleSheet("color: green; font-size: 14px;")
+            self.anki_status_indicator.setToolTip(f"AnkiConnect: {status_message}")
+        else:
+            self.anki_status_indicator.setStyleSheet("color: red; font-size: 14px;")
+            self.anki_status_indicator.setToolTip(f"AnkiConnect: {status_message}")
+
+    @pyqtSlot(bool, str)
+    def _on_notesium_status_changed(self, is_healthy: bool, status_message: str) -> None:
+        """Handle Notesium status change.
+
+        Args:
+            is_healthy: Whether Notesium is healthy.
+            status_message: Status description.
+        """
+        if is_healthy:
+            self.notesium_status_indicator.setStyleSheet("color: green; font-size: 14px;")
+            self.notesium_status_indicator.setToolTip(f"Notesium: {status_message}")
+        else:
+            self.notesium_status_indicator.setStyleSheet("color: red; font-size: 14px;")
+            self.notesium_status_indicator.setToolTip(f"Notesium: {status_message}")

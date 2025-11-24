@@ -4,7 +4,7 @@ from doughub.models import Media, Question
 from doughub.ui.dto import QuestionDTO
 
 
-def test_question_dto_from_model_valid():
+def test_question_dto_from_model_valid() -> None:
     metadata = {
         "answers": [
             {"text": "Answer 1", "is_correct": True, "peer_percentage": 80.5},
@@ -31,7 +31,7 @@ def test_question_dto_from_model_valid():
     assert dto.image_path is None
 
 
-def test_question_dto_from_model_malformed_json():
+def test_question_dto_from_model_malformed_json() -> None:
     question = Question(
         question_id=1,
         raw_html="<p>Question</p>",
@@ -46,8 +46,8 @@ def test_question_dto_from_model_malformed_json():
     assert dto.explanation_html == "<i>No explanation provided.</i>"
 
 
-def test_question_dto_from_model_missing_keys():
-    metadata = {"answers": [{"text": "A1"}]} # Missing is_correct, peer_percentage
+def test_question_dto_from_model_missing_keys() -> None:
+    metadata: dict[str, list[dict[str, str]]] = {"answers": [{"text": "A1"}]} # Missing is_correct, peer_percentage
     question = Question(
         question_id=1,
         raw_html="<p>Question</p>",
@@ -63,8 +63,8 @@ def test_question_dto_from_model_missing_keys():
     assert dto.answers[0].peer_percentage is None
 
 
-def test_question_dto_from_model_with_image():
-    metadata = {}
+def test_question_dto_from_model_with_image() -> None:
+    metadata: dict[str, str] = {}
     media = Media(media_role="image", relative_path="path/to/image.jpg")
     question = Question(
         question_id=1,

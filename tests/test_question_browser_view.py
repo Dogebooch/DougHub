@@ -1,4 +1,5 @@
 import sys
+from collections.abc import Generator
 
 import pytest
 from PyQt6.QtCore import Qt
@@ -8,27 +9,28 @@ from doughub.ui.question_browser_view import QuestionBrowserView
 
 
 @pytest.fixture(scope="session")
-def qapp():
+def qapp() -> Generator[QApplication, None, None]:
     app = QApplication.instance()
     if app is None:
         app = QApplication(sys.argv)
+    assert isinstance(app, QApplication)
     yield app
 
 
-def test_filter_items(qapp):
+def test_filter_items(qapp: QApplication) -> None:
     view = QuestionBrowserView()
 
     # Add items manually
     item1 = QListWidgetItem("Question 1")
-    item1.setData(Qt.ItemDataRole.UserRole + 1, "This is the first question about heart")
+    item1.setData(Qt.ItemDataRole.UserRole, "This is the first question about heart")
     view.list_widget.addItem(item1)
 
     item2 = QListWidgetItem("Question 2")
-    item2.setData(Qt.ItemDataRole.UserRole + 1, "This is the second question about lung")
+    item2.setData(Qt.ItemDataRole.UserRole, "This is the second question about lung")
     view.list_widget.addItem(item2)
 
     item3 = QListWidgetItem("Question 3")
-    item3.setData(Qt.ItemDataRole.UserRole + 1, "Another heart question")
+    item3.setData(Qt.ItemDataRole.UserRole, "Another heart question")
     view.list_widget.addItem(item3)
 
     # Filter by "heart"

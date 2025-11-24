@@ -153,7 +153,7 @@ def ingest_question(
     source = repo.get_or_create_source(name=source_name)
 
     # Check if question already exists
-    source_id: int = source.source_id  # type: ignore[assignment]
+    source_id: int = source.source_id
     existing_question = repo.get_question_by_source_key(source_id, question_key)
     if existing_question:
         logger.info(
@@ -191,7 +191,7 @@ def ingest_question(
             "mime_type": get_mime_type(media_file),
             "relative_path": relative_path,
         }
-        question_id: int = question.question_id  # type: ignore[assignment]
+        question_id: int = question.question_id
         media = repo.add_media_to_question(question_id, media_data)
         logger.info(f"  Added media: {relative_path} (ID: {media.media_id})")
 
