@@ -3,6 +3,8 @@ import logging
 import os
 from dataclasses import dataclass, field
 
+from pydantic import BaseModel, Field
+
 import doughub.config as config
 from doughub.models import Question
 
@@ -64,3 +66,18 @@ class QuestionDTO:
             dto.children = [cls.from_model(child) for child in question_model.children]
 
         return dto
+
+
+class MinimalQuestion(BaseModel):
+    """Minimal schema for new extraction pipeline.
+    
+    Represents a question with just context and stem HTML.
+    Context is optional, stem is required.
+    """
+    question_context_html: str = Field(default="", description="Optional context HTML for the question")
+    question_stem_html: str = Field(description="Required HTML content of the question stem")
+
+
+class MinimalQuestionBatch(BaseModel):
+    """Batch of minimal questions for processing."""
+    questions: list[MinimalQuestion] = Field(description="List of minimal questions to process")

@@ -73,6 +73,17 @@ class Question(Base):
     raw_html: Mapped[str] = mapped_column(Text, nullable=False)
     raw_metadata_json: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(50), default="extracted", nullable=False)
+    
+    # New minimal schema fields for extraction pipeline
+    question_context_html: Mapped[str | None] = mapped_column(Text, nullable=True)
+    question_stem_html: Mapped[str | None] = mapped_column(Text, nullable=True)
+    
+    # Legacy fields from previous extraction pipeline (optional for backward compatibility)
+    is_parsed: Mapped[bool | None] = mapped_column(nullable=True)
+    cleaned_question_html: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cleaned_explanation_html: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cleaned_answers_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    
     extraction_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     note_path: Mapped[str | None] = mapped_column(String, nullable=True)
     tags: Mapped[str | None] = mapped_column(String, nullable=True)
