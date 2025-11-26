@@ -79,3 +79,4 @@ alembic/
 
 # Node.js
 node_modules/
+tmp_analysis/
